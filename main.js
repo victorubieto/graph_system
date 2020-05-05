@@ -59,7 +59,7 @@ function initGraphCanvas(container_id)
     var graph = new LGraph();
     var graphcanvas = new LGraphCanvas(canvas, graph);
 
-    graphcanvas.background_image = "img/migrid.png";
+    graphcanvas.background_image = "../graph_system/img/migrid.png";
 
     graph.onAfterExecute = function() {
         graphcanvas.draw(true);
