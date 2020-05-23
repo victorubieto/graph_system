@@ -1,8 +1,4 @@
 /* this CSS contains only the basic CSS needed to run the app and use it */
-html, body { 
-    height: 100%; 
-    width: 100%;
-}
 
 .lgraphcanvas {
     /*cursor: crosshair;*/

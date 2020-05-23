@@ -13,13 +13,13 @@ const camera = {
 
     proj: mat4.create(),
     view: mat4.create(),
-    mvp: mat4.create() //viewprojection
+    mvp: mat4.create(), //viewprojection
 }
 
 const obj = {
     mesh: null,
     model: mat4.create(),
-    temp: mat4.create() //model_view
+    temp: mat4.create(), //model_view
 }
 
 init();
@@ -32,7 +32,9 @@ function init()
     initGraphCanvas(root);
     //WebGL View
     root = document.getElementById("view-area");
-    initWebGLView(root)
+    initWebGLView(root);
+    //Init Buttons
+    initListeners();
 
     //  ----- LOAD MATERIAL NEEDED -----
     //Load the shaders from a file
@@ -56,6 +58,8 @@ function initGraphCanvas(container_id)
 {
     //como es de uso personal asumo que ya he creado un canvas en el html
     var canvas = container_id.querySelector(".Graph");
+    canvas.height = container_id.offsetHeight;
+    canvas.width = container_id.offsetWidth;
     var graph = new LGraph();
     var graphcanvas = new LGraphCanvas(canvas, graph);
 
@@ -75,8 +79,38 @@ function initWebGLView(container_id)
 { 
     //como es de uso personal asumo que ya he creado un canvas en el html
     var canvas = container_id.querySelector(".View");
+    canvas.height = container_id.offsetHeight;
+    canvas.width = container_id.offsetWidth;
     gl = GL.create({canvas: canvas});
     gl.animate();
+}
+
+
+// This function inits the button functions
+function initListeners(){
+    var optButton = document.getElementById("options");
+    var loadDicom = document.getElementById("loadDicom");
+    var viewShader = document.getElementById("viewShader");
+
+    optButton.addEventListener("click", function(){
+    }, false);
+
+    loadDicom.addEventListener("click", function(){
+    }, false);
+
+    viewShader.addEventListener("click", function(){
+        w2popup.open({
+            width: 700, height: 500,
+            title: 'Shaders in Use',
+            body: '<br /> <h3>Vertex Shader</h3>' + 
+                '<pre>' + Previous_VS + '</pre>' +
+                '<br /> <h3>Fragment Shader</h3>' +
+                '<pre>' + Previous_FS + '</pre>',
+            onOpen  : function () {
+                console.log('opened');
+            }           
+        });
+    }, false);
 }
 
 
