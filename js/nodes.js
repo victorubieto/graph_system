@@ -89,6 +89,25 @@ addNewNodes = function()
     LiteGraph.registerNodeType("Input/Color", ColorSelect);
 
 
+    // ------------------------------------------ TexCoord Node ------------------------------------------ //
+    function TexCoord() {
+        this.addOutput("Position","vector");
+        this.addOutput("Normal","vector");
+        this.addOutput("UV","vector");
+    }
+
+    TexCoord.title = "TexCoord";
+    TexCoord.desc = "coordinate vectors selector";
+
+    TexCoord.prototype.onExecute = function() {
+        this.setOutputData(0, "Position");
+        this.setOutputData(1, "Normal");
+        this.setOutputData(2, "UV");
+    };
+
+    LiteGraph.registerNodeType("Input/TexCoord", TexCoord);
+
+
     // ------------------------------------------ Gradient Node ------------------------------------------ //
     function Gradient()
     {
@@ -168,17 +187,36 @@ addNewNodes = function()
 
 
     // ------------------------------------------ Dicom Node ------------------------------------------ //
-    function ImageTex()
+    function Dicom()
     {
         this.addInput("Vector", "vector"); //possible input, vector (d'on llegim la textura)
         this.addOutput("Color", "vector");
         this.addOutput("Alpha", "float");
+
+        this.properties = {
+            texture: 1, 
+        };
     }
 
-    ImageTex.title = "Dicom";
-    ImageTex.desc = "allows the user to load a dicom file";
+    Dicom.title = "Dicom";
+    Dicom.desc = "allows the user to load a dicom file";
 
-    ImageTex.prototype.onExecute = function()
+    Dicom.prototype.onAddPropertyToPanel = function(i, panel) {
+        var elem = document.createElement("button");
+        elem.class = "button";
+        elem.innerText = "Load Dicom";
+        
+        // var that = this;
+        // elem.onchange = function() {that.setValue(color.rgb)};
+        panel.content.appendChild(elem);
+
+        // var color = new jscolor.color(elem, {rgb: this.properties.color});
+        // this.properties.color = color.rgb;
+
+        return true;
+    };
+
+    Dicom.prototype.onExecute = function()
     {
         var vec = this.getInputData(0);
         if(vec === undefined)
@@ -195,24 +233,17 @@ addNewNodes = function()
         this.setOutputData(0, "texture2D( u_texture, " + vec + " ).a");
     }
 
-    LiteGraph.registerNodeType("Texture/Dicom", ImageTex);
+    LiteGraph.registerNodeType("Texture/Dicom", Dicom);
 
 
-    // ------------------------------------------  Node ------------------------------------------ //
-
-    function TexCoord(a,b)
-    {
-        return a+b;
-    }
-
-    LiteGraph.wrapFunctionAsNode("Input/TexCoord", TexCoord, ["Number","Number"],"Number");
-
+    // ------------------------------------------ Node ------------------------------------------ //
     function ColorRamp(a,b)
     {
         return a+b;
     }
 
     LiteGraph.wrapFunctionAsNode("Operator/ColorRamp", ColorRamp, ["Number","Number"],"Number");
+
 
     function Mapping(a,b)
     {

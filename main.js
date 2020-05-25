@@ -89,14 +89,10 @@ function initWebGLView(container_id)
 // This function inits the button functions
 function initListeners(){
     var optButton = document.getElementById("options");
-    var loadDicom = document.getElementById("loadDicom");
     var viewShader = document.getElementById("viewShader");
     var helpButton = document.getElementById("help");
 
     optButton.addEventListener("click", function(){
-    }, false);
-
-    loadDicom.addEventListener("click", function(){
     }, false);
 
     viewShader.addEventListener("click", function(){
@@ -133,6 +129,7 @@ function loadShaderTemplates()
 // Basic Template that inits the web with the essential nodes
 function graphTemplate()
 {
+    // Al final lo ordenare para dejar los que se van a quedar predeterminados!!!
     var node_color = LiteGraph.createNode("Input/Color");
     node_color.pos = [50,200];
     graph.add(node_color);
@@ -148,6 +145,10 @@ function graphTemplate()
     var node_out = LiteGraph.createNode("Output/Final");
     node_out.pos = [550,200];
     graph.add(node_out);
+
+    var node_dicom = LiteGraph.createNode("Texture/Dicom");
+    node_dicom.pos = [350,400];
+    graph.add(node_dicom);
 
     //Connections
     node_color.connect(0, node_volume, 0);
@@ -202,7 +203,7 @@ function createScene()
     }
 
     //Basic shader while the parser hasn't read the other shaders yet
-    VS = `
+    var VS = `
         precision highp float;
         attribute vec3 a_vertex;
         attribute vec3 a_normal;
@@ -216,7 +217,7 @@ function createScene()
             gl_Position = u_mvp * vec4(a_vertex,1.0);
         }
         `;
-    FS = `
+    var FS = `
         precision highp float;
         varying vec3 v_normal;
         uniform vec4 u_camera_position;
@@ -275,7 +276,7 @@ function render()
         //render mesh using the shader
         if(obj.mesh)
         shader.uniforms({
-            u_color: [1,0,0,1],
+            u_color: [0,0,1,1],
             u_camera_position: camera.cam_pos,
             u_local_camera_position: local_cam_pos,
             u_model: obj.model,
