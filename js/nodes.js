@@ -3,124 +3,216 @@ var Previous_FS = null;
 
 addNewNodes = function()
 {
-    // ----------------------- Volume Node --------------------------------
-    function Volume()
-    {
-        this.addInput("Density", "number");
-        this.addInput("Color", "color");
-        this.addOutput("Volume", "string");
-    }
-
-    Volume.prototype.toString = function(input)
-    {
-        if (input == null) {
-            return "null";
-        } else if (input.constructor === Number) {
-            return input.toFixed(1);
-        } else if (input.constructor === Array) {
-            var str = "";
-            for (var i = 0; i < (input.length - 1); ++i) {
-                str += input[i] + ".0,";
-            }
-            str += input[i] + ".0";
-            return str;
-        } else {
-            return String(input);
+    // ------------------------------------------ Number Node ------------------------------------------ //
+    function NumberSelect() {
+        this.addOutput("Number","value");
+        this.properties = {
+            value: 1.0
         }
+        this.widget = this.addWidget(
+            "number",
+            "Number",
+            this.properties.value,
+            this.setValue.bind(this),
+            {min: 0, max: 10}
+        );
+        this.widgets_up = true;
     }
 
-    Volume.title = "Volume";
+    NumberSelect.title = "Number";
+    NumberSelect.desc = "number selector";
 
-    Volume.prototype.onExecute = function()
-    {
-        var density = this.getInputData(0);
-        if(density === undefined)
-            density = "1.0";
-        else density = this.toString(density);
-        var color = this.getInputData(1);
-        if(color === undefined)
-            color = "0.5,0.5,0.5,1.0";
-        else color = this.toString(color);
-        var volume_code = `
-            vec3 ray_origin = v_pos;
-            vec3 ray_direction = normalize(ray_origin - u_local_camera_position);
-            vec3 sample_pos = ray_origin;
-            vec3 ray_step = ray_direction / u_quality;
-            float d = length(ray_step);
-            vec4 sample_color;
+    NumberSelect.prototype.setValue = function(v) {
+        this.properties.value = v;
+    };
 
-            for(int i=0; i<100000; i++){     
+    NumberSelect.prototype.onExecute = function() {
+        this.setOutputData(0, this.properties.value);
+    };
 
-                float v = ` + density + `; // De momento constante
+    LiteGraph.registerNodeType("Input/Number", NumberSelect);
 
-                sample_color = v * vec4(` + color + `);
-                sample_color = vec4(sample_color.xyz * sample_color.w, sample_color.w); //transparency, applied this way to avoid color bleeding
-                
-                final_color = d * sample_color * (1.0 - final_color.w) + final_color; //compositing with previous value
-                if(final_color.w >= 1.0) break;
 
-                sample_pos = sample_pos + ray_step;
-
-                vec3 abss = abs(sample_pos);
-                if(i > 1 && (abss.x > 1.0 || abss.y > 1.0 || abss.z > 1.0)) break;
-            }
-            `;
-
-        this.setOutputData(0, volume_code);
+    // ------------------------------------------ Color Node ------------------------------------------ //
+    function ColorSelect() {
+        this.addOutput("Color", "color");
+        this.properties = {
+            color: [0.5,0.5,0.5,1.0],
+        };
     }
+    
+    ColorSelect.title = "Color";
+    ColorSelect.desc = "color selector";
 
-    LiteGraph.registerNodeType("VICTOR/Volume", Volume);
+    ColorSelect.prototype.onAddPropertyToPanel = function(i, panel) {
+        var elem = document.createElement("input");
+        elem.class = "color";
+        var that = this;
+        elem.onchange = function() {that.setValue(color.rgb)};
+        panel.content.appendChild(elem);
+
+        var color = new jscolor.color(elem, {rgb: this.properties.color});
+        this.properties.color = color.rgb;
+
+        return true;
+    };
+
+    ColorSelect.prototype.setValue = function(v) {
+        v.push(1.0);
+        this.properties.color = v;
+    };
+
+    ColorSelect.prototype.onDrawBackground = function(ctx) {
+        var c = JSON.parse("[" + this.properties.color + "]");
+        ctx.fillStyle =
+            "rgb(" +
+            Math.floor(Math.clamp(c[0], 0, 1) * 255) +
+            "," +
+            Math.floor(Math.clamp(c[1], 0, 1) * 255) +
+            "," +
+            Math.floor(Math.clamp(c[2], 0, 1) * 255) +
+            ")";
+        if (this.flags.collapsed) {
+            this.boxcolor = ctx.fillStyle;
+        } else {
+            ctx.fillRect(0, 0, this.size[0], this.size[1]);
+        }
+    };
+
+    ColorSelect.prototype.onExecute = function() {
+
+        var color = this.properties.color;
+
+        this.setOutputData(0, color);
+    };
+
+    LiteGraph.registerNodeType("Input/Color", ColorSelect);
 
 
-    // ------------------------ Gradient Node ----------------------------
+    // ------------------------------------------ Gradient Node ------------------------------------------ //
     function Gradient()
     {
         this.addInput("Vector", "vector");
-        this.addInput("Color", "color");
-        this.addOutput("Volume", "string");
+        this.addOutput("Color", "color");
+        this.addOutput("Fac", "value");
     }
 
     Gradient.title = "Gradient";
+    Gradient.desc = "creates a gradient effect for a chosen vector";
 
     Gradient.prototype.onExecute = function()
     {
-        var density = this.getInputData(0);
-        if(density === undefined)
-            density = "0.1";
-        var color = this.getInputData(1);
-        if(color === undefined)
-            color = "0.0,0.0,0.0,1.0";
+        var vector = this.getInputData(0);
+        if(vector === undefined)
+        {
+            vector = "sample_pos";
+        }
 
-        var gradient_code = `
-            `;
+        var gradient_code = `` + vector + `.x`;
+        var gradientRGB_code = `` + vector + `.xyz, 1.0`;
 
-        this.setOutputData(0, gradient_code);
+        this.setOutputData(0, gradientRGB_code);
+        this.setOutputData(1, gradient_code);
     }
 
-    LiteGraph.registerNodeType("VICTOR/Gradient", Gradient);
+    LiteGraph.registerNodeType("Texture/Gradient", Gradient);
 
 
-    //
-    function Noise(a,b)
+    // ------------------------------------------ Noise Node ------------------------------------------ //
+    function Noise()
     {
-        return a+b;
+        this.addInput("Vector", "vector");
+        this.addOutput("Color", "color");
+        this.addOutput("Fac", "value");
+
+        this.widgetScale = this.addWidget(
+            "number",
+            "Scale",
+            1.0,
+            this.setValue.bind(this),
+            {min: -100, max: 100}
+        );
+        this.widgetDetail = this.addWidget(
+            "combo",
+            "Detail",
+            1,
+            this.setValue.bind(this),
+            {values: [1, 2, 3, 4, 5, 6, 7, 8]}
+        );
+    }
+    
+    Noise.title = "Noise";
+    Noise.desc = "gives a random value using perlin noise algorithm";
+
+    Noise.prototype.setValue = function(v) {
+        this.widget.value = v;
+    };
+
+    Noise.prototype.onExecute = function()
+    {
+        var vector = this.getInputData(0);
+        if(vector === undefined)
+        {
+            vector = "";
+            vectorRGB = ""
+        }
+
+        var gradient_code = `` + vector + ``;
+        var gradientRGB_code = `` + vectorRGB + ``;
+
+        this.setOutputData(0, gradientRGB_code);
+        this.setOutputData(1, gradient_code);
     }
 
-    LiteGraph.wrapFunctionAsNode("VICTOR/Noise", Noise, ["Number","Number"],"Number");
+    LiteGraph.registerNodeType("Texture/Noise", Noise);
+
+
+    // ------------------------------------------ Dicom Node ------------------------------------------ //
+    function ImageTex()
+    {
+        this.addInput("Vector", "vector"); //possible input, vector (d'on llegim la textura)
+        this.addOutput("Color", "vector");
+        this.addOutput("Alpha", "float");
+    }
+
+    ImageTex.title = "Dicom";
+    ImageTex.desc = "allows the user to load a dicom file";
+
+    ImageTex.prototype.onExecute = function()
+    {
+        var vec = this.getInputData(0);
+        if(vec === undefined)
+            vec = "v_uv";
+
+        // HE DE MIRAR ESTO!!!!!!!!!!!!!!!!!!!
+        CODIGO = `\js
+            //define exported uniforms from the shader (name, uniform, widget)
+            this.createSampler("Texture","u_texture");
+            `;
+        shader.uniforms({u_texture: 0}); //revisar el 0
+
+        this.setOutputData(0, "texture2D( u_texture, " + vec + " )"); //cuidado si en algun momento necesito mas de una imagen
+        this.setOutputData(0, "texture2D( u_texture, " + vec + " ).a");
+    }
+
+    LiteGraph.registerNodeType("Texture/Dicom", ImageTex);
+
+
+    // ------------------------------------------  Node ------------------------------------------ //
 
     function TexCoord(a,b)
     {
         return a+b;
     }
 
-    LiteGraph.wrapFunctionAsNode("VICTOR/TexCoord", TexCoord, ["Number","Number"],"Number");
+    LiteGraph.wrapFunctionAsNode("Input/TexCoord", TexCoord, ["Number","Number"],"Number");
 
     function ColorRamp(a,b)
     {
         return a+b;
     }
 
-    LiteGraph.wrapFunctionAsNode("VICTOR/ColorRamp", ColorRamp, ["Number","Number"],"Number");
+    LiteGraph.wrapFunctionAsNode("Operator/ColorRamp", ColorRamp, ["Number","Number"],"Number");
 
     function Mapping(a,b)
     {
@@ -138,6 +230,7 @@ addNewNodes = function()
     }
 
     MixColor.title = "MixRGB";
+    MixColor.desc = "interpolates input colors usign a factor";
 
     MixColor.prototype.onExecute = function()
     {
@@ -162,216 +255,126 @@ addNewNodes = function()
         this.setOutputData(0, "" + color_result + "");
     }
 
-    LiteGraph.registerNodeType("VICTOR/MixRGB", MixColor);
+    LiteGraph.registerNodeType("Operator/MixRGB", MixColor);
 
 
-    LiteGraph.wrapFunctionAsNode("VICTOR/Mapping", Mapping, ["Number","Number"],"Number");
+    LiteGraph.wrapFunctionAsNode("Operator/Mapping", Mapping, ["Number","Number"],"Number");
 
     function TransferFunc(a,b)
     {
         return a+b;
     }
 
-    LiteGraph.wrapFunctionAsNode("VICTOR/TransferFunc", TransferFunc, ["Number","Number"],"Number");
+    LiteGraph.wrapFunctionAsNode("Operator/TransferFunc", TransferFunc, ["Number","Number"],"Number");
 
 
-    // ---------------------- Texture Image Node -------------------------
-    function ImageTex()
+    // ------------------------------------------ Volume Node ------------------------------------------ //
+    function Volume()
     {
-        this.addInput("Vector", "vector"); //possible input, vector (d'on llegim la textura)
-        this.addOutput("Color", "vector");
-        this.addOutput("Alpha", "float");
-    }
+        this.addInput("Color", "color");
 
-    ImageTex.title = "Image Texture";
-
-    ImageTex.prototype.onExecute = function()
-    {
-        var vec = this.getInputData(0);
-        if(vec === undefined)
-            vec = "v_uv";
-
-        // HE DE MIRAR ESTO!!!!!!!!!!!!!!!!!!!
-        CODIGO = `\js
-            //define exported uniforms from the shader (name, uniform, widget)
-            this.createSampler("Texture","u_texture");
-            `;
-        shader.uniforms({u_texture: 0}); //revisar el 0
-
-        this.setOutputData(0, "texture2D( u_texture, " + vec + " )"); //cuidado si en algun momento necesito mas de una imagen
-        this.setOutputData(0, "texture2D( u_texture, " + vec + " ).a");
-    }
-
-    LiteGraph.registerNodeType("VICTOR/ImageTexture", ImageTex);
-
-
-    // ----------------------- Number Node --------------------------
-    function NumberSelect() {
-        this.addOutput("Number", 0, { label: "" });
-        this.properties = {
-            value: 1.0
-        }
+        this.addInput("Density", "value");
         this.widget = this.addWidget(
             "number",
-            "Value",
-            this.properties.value,
+            "Density",
+            1.0,
             this.setValue.bind(this),
-            { min: 0, max: 10}
+            {min: 0, max: 10}
         );
-        this.widgets_up = true;
+
+        this.addOutput("Volume", "volume");
     }
 
-    NumberSelect.prototype.setValue = function(v) {
-        this.properties.value = v;
+    Volume.title = "Volume";
+    Volume.desc = "volume render algorithm";
+
+    Volume.prototype.setValue = function(v) {
         this.widget.value = v;
     };
 
-    NumberSelect.title = "Number";
-
-    NumberSelect.prototype.onExecute = function() {
-        this.setOutputData(0, this.properties.value);
-    };
-
-    NumberSelect.toString = function(o) {
-        if (o == null) {
+    Volume.prototype.toString = function(input)
+    {
+        if (input == null) {
             return "null";
-        } else if (o.constructor === Number) {
-            return o.toFixed(1);
-        } else if (o.constructor === Array) {
-            var str = "[";
-            for (var i = 0; i < o.length; ++i) {
-                str += NumberSelect.toString(o[i]) + (i + 1 != o.length ? "," : "");
+        } else if (input.constructor === Number) {
+            return input.toFixed(1);
+        } else if (input.constructor === Array) {
+            var str = "";
+            for (var i = 0; i < (input.length - 1); ++i) {
+                if (input[i] % 1 != 0) //check if is decimal or not
+                    str += input[i].toFixed(1) + ",";
+                else
+                    str += input[i] + ".0,";
             }
-            str += "]";
+            str += input[i] + ".0";
             return str;
         } else {
-            return String(o);
+            return String(input);
         }
-    };
-
-    NumberSelect.prototype.onDrawBackground = function(ctx) {
-        //show the current value
-        this.outputs[0].label = this.properties.value;
-    };
-
-    LiteGraph.registerNodeType("VICTOR/Number", NumberSelect);
-
-
-    //---------------------- Color Node ------------------------
-    function ColorSelect() {
-        this.addOutput("Color", "color");
-        this.properties = {
-            color: vec4.create()
-        };
-        this.properties.color = [0.0,0.0,0.0,1.0];
-
-        this.widget = this.addWidget(
-            "string",
-            "Color",
-            this.properties.color,
-            this.setValue.bind(this)
-        );
-        this.widgets_up = true;
     }
 
-    ColorSelect.prototype.setValue = function(v) {
-        this.properties.color = v;
-        this.widget.color = v;
-    };
+    Volume.prototype.onExecute = function()
+    {
+        var color = this.getInputData(0);
+        if(color === undefined)
+            color = "0.5,0.5,0.5,1.0";
+        else color = this.toString(color);
 
-    ColorSelect.title = "Color";
-
-    ColorSelect.prototype.onDrawBackground = function(ctx) {
-        var c = JSON.parse("[" + this.properties.color + "]");
-        ctx.fillStyle =
-            "rgb(" +
-            Math.floor(Math.clamp(c[0], 0, 1) * 255) +
-            "," +
-            Math.floor(Math.clamp(c[1], 0, 1) * 255) +
-            "," +
-            Math.floor(Math.clamp(c[2], 0, 1) * 255) +
-            ")";
-        if (this.flags.collapsed) {
-            this.boxcolor = ctx.fillStyle;
-        } else {
-            ctx.fillRect(0, 0, this.size[0], this.size[1]);
+        var density = this.getInputData(1);
+        if(density === undefined) {
+            this.widget.disabled = false;
+            density = this.toString(this.widget.value);
         }
-    };
-
-    ColorSelect.prototype.onExecute = function() {
-
-        var color = this.properties.color;
-
-        if (this.inputs) {
-            for (var i = 0; i < this.inputs.length; i++) {
-                var input = this.inputs[i];
-                var v = this.getInputData(i);
-                if (v === undefined) {
-                    continue;
-                }
-                switch (input.name) {
-                    case "RGB":
-                    case "RGBA":
-                        color.set(v);
-                        break;
-                    case "R":
-                        color[0] = v;
-                        break;
-                    case "G":
-                        color[1] = v;
-                        break;
-                    case "B":
-                        color[2] = v;
-                        break;
-                    case "A":
-                        color[3] = v;
-                        break;
-                }
-            }
+        else {
+            this.widget.disabled = true;
+            density = this.toString(density);
         }
         
-        //convert into string
-        /*for (i = 0; i < color.length; i++)
-        {	
-            if (color[i] === 0)
-                color[i] = "0.0";
-            else if (color[i] === 1)
-                color[i] = "1.0";
-            else
-                color[i] = color[i].toString();
-        }*/
-        //var str_color = color[0] + "," + color[1] + "," + color[2] + "," + color[3];
+        var volume_code = `
+        vec3 ray_origin = v_pos;
+        vec3 ray_direction = normalize(ray_origin - u_local_camera_position);
+        vec3 sample_pos = ray_origin;
+        vec3 ray_step = ray_direction / u_quality;
+        float d = length(ray_step);
+        vec4 sample_color;
 
-        this.setOutputData(0, color);
-    };
+        for(int i=0; i<100000; i++){     
 
-    ColorSelect.prototype.onGetInputs = function() {
-        
-        return [
-            ["RGB", "vec3"],
-            ["RGBA", "vec4"],
-            ["R", "number"],
-            ["G", "number"],
-            ["B", "number"],
-            ["A", "number"]
-        ];
-    };
+            float v = ` + density + `; // Density
 
-    LiteGraph.registerNodeType("VICTOR/Color", ColorSelect);
+            sample_color = v * vec4(` + color + `);
+            //transparency, applied this way to avoid color bleeding
+            sample_color = vec4(sample_color.xyz * sample_color.w, sample_color.w); 
+            
+            final_color = d * sample_color * (1.0 - final_color.w) + final_color; //compositing with previous value
+            if(final_color.w >= 1.0) break;
+
+            sample_pos = sample_pos + ray_step;
+
+            vec3 abss = abs(sample_pos);
+            if(i > 1 && (abss.x > 1.0 || abss.y > 1.0 || abss.z > 1.0)) break;
+        }
+        `;
+
+        this.setOutputData(0, volume_code);
+    }
+
+    LiteGraph.registerNodeType("Shader/Volume", Volume);
 
 
-    //-------------------- Output Node -----------------------
+    // ------------------------------------------ Output Node ------------------------------------------ //
     Shader.Previous_VS = undefined;
     Shader.Previous_FS = undefined;
 
     function Final()
     {
-        this.addInput("Surface", "string");
-        this.addInput("Volume", "string");
-        this.addInput("Displacement", "string");
+        this.addInput("Surface", "surface");
+        this.addInput("Volume", "volume");
+        this.addInput("Displacement", "displacenent");
     }
 
     Final.title = "Output";
+    Final.desc = "material output, assmebles the final shader";
 
     Final.prototype.onExecute = function()
     {
@@ -410,5 +413,5 @@ addNewNodes = function()
         }
     }
 
-    LiteGraph.registerNodeType("VICTOR/Final", Final);
+    LiteGraph.registerNodeType("Output/Final", Final);
 }

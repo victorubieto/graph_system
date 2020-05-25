@@ -3,6 +3,7 @@
 <html>
 <head>
     <title>Node-Based Shader Editor</title>
+    
     <link rel="stylesheet" type="text/css" href="css/litegraph.css">
     <link rel="stylesheet" type="text/css" href="css/style.css">
     <link rel="stylesheet" type="text/css" href="css/w2ui-1.5.rc1.css">
@@ -12,7 +13,8 @@
     <script type="text/javascript" src="js/litegraph.js"></script>
     <script type="text/javascript" src="js/jquery-3.5.1.min.js"></script>
     <script type="text/javascript" src="js/w2ui-1.5.rc1.js"></script>
-    
+    <script type="text/javascript" src="js/jscolor/jscolor.js"></script>
+
     <script type="text/javascript" src="js/nodes.js"></script>
 </head>
 <body>
@@ -20,13 +22,16 @@
         <div style="float: left; width: 5%; height: 1px;"></div>
         <button id="options" class="button">Options</button>
         <button id="loadDicom" class="button">Load Dicom</button>
-        <button id="viewShader" class="button" onclick="">View Shader</button>
+        <button id="viewShader" class="button">View Shader</button>
+        <button id="help" class="button" style="float: right; margin-right: 50px;">Help</button>
         <span class="text" style="float: right; padding-right: 50px;">Node-Based Shader Editor</span>
     </div>
     
     <div id="main">
         <div id="graph-area">
-            <canvas class="Graph"></canvas>
+            <div id="editor">
+                <canvas class="Graph"></canvas>
+            </div>
         </div>
         <div id="view-area">
             <canvas class="View"></canvas>

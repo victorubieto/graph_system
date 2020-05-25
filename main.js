@@ -28,7 +28,7 @@ function init()
 {
     //  ----- INIT CANVAS FUNCTIONALITIES -----
     //GraphCanvas
-    var root = document.getElementById("graph-area");
+    var root = document.getElementById("editor");
     initGraphCanvas(root);
     //WebGL View
     root = document.getElementById("view-area");
@@ -44,7 +44,7 @@ function init()
 
     //  ----- INIT BASIC SCENE -----
     //Creates some essential nodes on the initial canvas
-    basicTemplate();
+    graphTemplate();
     //Inits the scene to render
     createScene();
 
@@ -52,14 +52,15 @@ function init()
     onLoad();
 }
 
+// ---------------------------------------- INIT ----------------------------------------------- //
 
 // Graph Canvas Creation
 function initGraphCanvas(container_id)
 {
-    //como es de uso personal asumo que ya he creado un canvas en el html
     var canvas = container_id.querySelector(".Graph");
     canvas.height = container_id.offsetHeight;
     canvas.width = container_id.offsetWidth;
+
     var graph = new LGraph();
     var graphcanvas = new LGraphCanvas(canvas, graph);
 
@@ -71,13 +72,13 @@ function initGraphCanvas(container_id)
 
     window.graphcanvas = graphcanvas;
     window.graph = graph;
-}
 
+    graphcanvas.onShowNodePanel = onShowNodePanel.bind(this);
+}
 
 // WebGL Canvas Creation
 function initWebGLView(container_id)
 { 
-    //como es de uso personal asumo que ya he creado un canvas en el html
     var canvas = container_id.querySelector(".View");
     canvas.height = container_id.offsetHeight;
     canvas.width = container_id.offsetWidth;
@@ -85,12 +86,12 @@ function initWebGLView(container_id)
     gl.animate();
 }
 
-
 // This function inits the button functions
 function initListeners(){
     var optButton = document.getElementById("options");
     var loadDicom = document.getElementById("loadDicom");
     var viewShader = document.getElementById("viewShader");
+    var helpButton = document.getElementById("help");
 
     optButton.addEventListener("click", function(){
     }, false);
@@ -111,8 +112,15 @@ function initListeners(){
             }           
         });
     }, false);
-}
 
+    helpButton.addEventListener("click", function(){
+        w2popup.load({ 
+            url: 'help.html',
+            showMax: true,
+            width: 800,
+            height: 600});
+    }, false);
+}
 
 // This function reads the file that contains the shaders and store them
 function loadShaderTemplates()
@@ -122,34 +130,30 @@ function loadShaderTemplates()
 	});
 }
 
-
 // Basic Template that inits the web with the essential nodes
-function basicTemplate()
+function graphTemplate()
 {
-    var node_color = LiteGraph.createNode("VICTOR/Color");
-    node_color.pos = [50,300];
+    var node_color = LiteGraph.createNode("Input/Color");
+    node_color.pos = [50,200];
     graph.add(node_color);
-    node_color.setValue([0.0,1.0,1.0,1.0]);
 
-    var node_num = LiteGraph.createNode("VICTOR/Number");
-    node_num.pos = [50,200];
+    var node_num = LiteGraph.createNode("Input/Number");
+    node_num.pos = [50,300];
     graph.add(node_num);
-    //node_num.prototype.setValue(5);
 
-    var node_volume = LiteGraph.createNode("VICTOR/Volume");
+    var node_volume = LiteGraph.createNode("Shader/Volume");
     node_volume.pos = [300,200];
     graph.add(node_volume);
 
-    var node_out = LiteGraph.createNode("VICTOR/Final");
+    var node_out = LiteGraph.createNode("Output/Final");
     node_out.pos = [550,200];
     graph.add(node_out);
 
     //Connections
-    node_num.connect(0, node_volume, 0);
-    node_color.connect(0, node_volume, 1);
+    node_color.connect(0, node_volume, 0);
+    node_num.connect(0, node_volume, 1);
     node_volume.connect(0, node_out, 1);   
 }
-
 
 function createScene()
 {
@@ -227,6 +231,8 @@ function createScene()
     shader = new Shader( VS, FS );
 }
 
+// ---------------------------------------- RENDER ----------------------------------------------- //
+
 // Main Loop
 function onLoad()
 {
@@ -237,7 +243,6 @@ function onLoad()
 
     requestAnimationFrame( this.onLoad.bind(this) );    
 }
-
 
 function render()
 {
@@ -280,3 +285,247 @@ function render()
     }
 }
 
+
+// ---------------------------------------- PANEL ----------------------------------------------- //
+
+function onShowNodePanel(node)
+{
+	window.SELECTED_NODE = node;
+	var panel = document.querySelector("#node-panel");
+	if(panel)
+		panel.close();
+    var ref_window = this.graphcanvas.getCanvasWindow();
+	panel = this.createPanel(node.title || "",{closable: true, window: ref_window });
+	panel.id = "node-panel";
+	panel.classList.add("settings");
+	var that = this;
+	var graphcanvas = this.graphcanvas;
+
+	function inner_refresh()
+	{
+		panel.content.innerHTML = ""; //clear
+		panel.addHTML("<span class='node_type'>"+node.type+"</span><span class='node_desc'>"+(node.constructor.desc || "")+"</span><span class='separator'></span>");
+
+		panel.addHTML("<h3>Properties</h3>");
+
+		for(var i in node.properties)
+		{
+			var value = node.properties[i];
+			var info = node.getPropertyInfo(i);
+            var type = info.type || "string";
+        
+			//in case the user wants control over the side panel widget
+            if( node.onAddPropertyToPanel && node.onAddPropertyToPanel(i,panel) )
+                continue;
+
+			panel.addWidget( info.widget || info.type, i, value, info, function(name,value){
+				node.setProperty(name,value);
+				graphcanvas.dirty_canvas = true;
+			});
+		}
+
+		panel.addSeparator();
+
+		panel.addButton("Delete",function(){
+            node.graph.remove(node);
+			panel.close();
+		}).classList.add("delete");
+	}
+
+	function inner_showCodePad( node, propname )
+	{
+		panel.style.top = "calc( 50% - 250px)";
+		panel.style.left = "calc( 50% - 400px)";
+		panel.style.width = "800px";
+		panel.style.height = "500px";
+
+		if(window.CodeFlask) //disabled for now
+		{
+			panel.content.innerHTML = "<div class='code'></div>";
+			var flask = new CodeFlask( "div.code", { language: 'js' });
+			flask.updateCode(node.properties[propname]);
+			flask.onUpdate( function(code) {
+				node.setProperty(propname, code);
+			});
+		}
+		else
+		{
+			panel.content.innerHTML = "<textarea class='code'></textarea>";
+			var textarea = panel.content.querySelector("textarea");
+			textarea.value = node.properties[propname];
+			textarea.addEventListener("keydown", function(e){
+				//console.log(e);
+				if(e.code == "Enter" && e.ctrlKey )
+				{
+					console.log("Assigned");
+					node.setProperty(propname, textarea.value);
+				}
+			});
+			textarea.style.height = "calc(100% - 40px)";
+		}
+		var assign = that.createButton( "Assign", null, function(){
+			node.setProperty(propname, textarea.value);
+		});
+		panel.content.appendChild(assign);
+		var button = that.createButton( "Close", null, function(){
+			panel.style.height = "";
+			inner_refresh();
+		});
+		button.style.float = "right";
+		panel.content.appendChild(button);
+	}
+
+    inner_refresh();
+
+    // get the content
+    var content = document.getElementById("graph-area");
+
+	content.appendChild( panel );
+}
+
+function createPanel(title, options) 
+{
+	options = options || {};
+
+    var ref_window = options.window || window;
+    var root = document.createElement("div");
+    root.className = "dialog";
+    root.innerHTML = "<div class='dialog-header'><span class='dialog-title'></span></div><div class='dialog-content'></div><div class='dialog-footer'></div>";
+    root.header = root.querySelector(".dialog-header");
+	if(options.closable)
+	{
+	    var close = document.createElement("span");
+		close.innerHTML = "&#10005;";
+		close.classList.add("close");
+		close.addEventListener("click",function(){
+			root.close();
+		});
+		root.header.appendChild(close);
+	}
+    root.title_element = root.querySelector(".dialog-title");
+	root.title_element.innerText = title;
+    root.content = root.querySelector(".dialog-content");
+    root.footer = root.querySelector(".dialog-footer");
+	root.close = function()
+	{
+		this.parentNode.removeChild(this);
+	}
+
+	root.addHTML = function(code, classname)
+	{
+		var elem = document.createElement("div");
+		if(classname)
+			elem.className = classname;
+		elem.innerHTML = code;
+		root.content.appendChild(elem);
+		return elem;
+	}
+
+	root.addButton = function( name, callback, options )
+	{
+		var elem = document.createElement("button");
+		elem.innerText = name;
+		elem.options = options;
+		elem.addEventListener("click",callback);
+		root.footer.appendChild(elem);
+		return elem;
+	}
+
+	root.addSeparator = function()
+	{
+		var elem = document.createElement("div");
+		elem.className = "separator";
+		root.content.appendChild(elem);
+	}
+
+	root.addWidget = function( type, name, value, options, callback )
+	{
+		options = options || {};
+		var str_value = String(value);
+		if(type == "number")
+			str_value = value.toFixed(3);
+
+		var elem = document.createElement("div");
+		elem.className = "property";
+		elem.innerHTML = "<span class='property_name'></span><span class='property_value'></span>";
+		elem.querySelector(".property_name").innerText = name;
+		var value_element = elem.querySelector(".property_value");
+		value_element.innerText = str_value;
+		elem.dataset["property"] = name;
+		elem.dataset["type"] = options.type || type;
+		elem.options = options;
+		elem.value = value;
+
+		//if( type == "code" )
+		//	elem.addEventListener("click", function(){ inner_showCodePad( node, this.dataset["property"] ); });
+		if (type == "boolean")
+		{
+			elem.classList.add("boolean");
+			if(value)
+				elem.classList.add("bool-on");
+			elem.addEventListener("click", function(){ 
+				//var v = node.properties[this.dataset["property"]]; 
+				//node.setProperty(this.dataset["property"],!v); this.innerText = v ? "true" : "false"; 
+				var propname = this.dataset["property"];
+				this.value = !this.value;
+				this.classList.toggle("bool-on");
+				this.querySelector(".property_value").innerText = this.value ? "true" : "false";
+				innerChange(propname, this.value );
+			});
+		}
+		else if (type == "string" || type == "number")
+		{
+			value_element.setAttribute("contenteditable",true);
+			value_element.addEventListener("keydown", function(e){ 
+				if(e.code == "Enter")
+				{
+					e.preventDefault();
+					this.blur();
+				}
+			});
+			value_element.addEventListener("blur", function(){ 
+				var v = this.innerText;
+				var propname = this.parentNode.dataset["property"];
+				var proptype = this.parentNode.dataset["type"];
+				if( proptype == "number")
+					v = Number(v);
+				innerChange(propname, v);
+			});
+		}
+		else if (type == "enum")
+			value_element.addEventListener("click", function(event){ 
+				var values = options.values || [];
+				var propname = this.parentNode.dataset["property"];
+				var elem_that = this;
+				var menu = new LiteGraph.ContextMenu(values,{
+						event: event,
+						className: "dark",
+						callback: inner_clicked
+					},
+					ref_window);
+				function inner_clicked(v, option, event) {
+					//node.setProperty(propname,v); 
+					//graphcanvas.dirty_canvas = true;
+					elem_that.innerText = v;
+					innerChange(propname,v);
+					return false;
+				}
+			});
+
+		root.content.appendChild(elem);
+
+		function innerChange(name, value)
+		{
+			console.log("change",name,value);
+			//that.dirty_canvas = true;
+			if(options.callback)
+				options.callback(name,value);
+			if(callback)
+				callback(name,value);
+		}
+
+		return elem;
+	}
+
+    return root;
+};
