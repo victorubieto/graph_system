@@ -9,14 +9,14 @@ html, body  {
 }
 
 #main {
-    height: 96%;
+    height: calc(100% - 25px);
     width: 100%;
 }
 
 #top-bar {
-    height: 4%;
+    height: 25px;
     width: 100%;
-    padding-top: 4px;
+    padding: 6px;
     
     background: #1d1d1d;
 }
@@ -95,7 +95,8 @@ pre {
 	left: 10px;
 	bottom: 20px;
 	height: calc( 50% );
-	margin: auto;
+    margin: auto;
+    overflow: auto;
 }
 
 .dialog .close {
@@ -116,7 +117,7 @@ pre {
 }
 
 .dialog .dialog-header { height: 40px; }
-.dialog .dialog-footer { height: 40px; padding: 5px; padding-bottom: 50px; border-top: 1px solid #1a1a1a;}
+.dialog .dialog-footer { height: 30px; padding: 5px; padding-bottom: 0px; border-top: 1px solid #1a1a1a;}
 
 .dialog .dialog-header .dialog-title {
     font: 20px "Arial";
@@ -128,7 +129,6 @@ pre {
 .dialog .dialog-content {
     height: calc(100% - 90px);
     width: calc(100% - 10px);
-    /*background-color: black;*/
     padding: 4px;
     display: inline-block;
 	color: #AAA;
@@ -174,10 +174,13 @@ pre {
 
 .dialog .property {
 	margin-bottom: 2px;
-	padding: 10px;
+    padding: 10px;
+    padding-top: 5px;
+    padding-bottom: 5px;
 }
 
 .dialog .property_name {
+    
 	color: #737373;
     display: inline-block;
     text-align: left;
@@ -190,6 +193,7 @@ pre {
 .dialog .property_value {
     display: inline-block;
     text-align: right;
+    font: 15px "Arial";
 	color: #AAA;
 	background-color: #1A1A1A;
     width: calc( 100% - 122px );

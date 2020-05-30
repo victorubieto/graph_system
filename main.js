@@ -1,5 +1,5 @@
 //  -- Víctor Ubieto --
-//  Basic web template using litegraph library and a WebGL view canvas
+//  Basic graph shader editor using litegraph library and litegl to view the result in WebGL 1
 //
 
 var webgl_canvas = null;
@@ -7,19 +7,29 @@ var parsedFile = [];
 var shader;
 var gl;
 
-const camera = {
-    cam_pos: mat4.create(),
-    cam_center: mat4.create(),
+var camera = null;
 
-    proj: mat4.create(),
-    view: mat4.create(),
-    mvp: mat4.create(), //viewprojection
+const time = {
+    last: 0,
+    now: null,
+    dt: null
+}
+
+const mouse = {
+    button: 0,
+    pos_x: 0,
+    pos_y: 0,
+    delta_x: 0,
+    delta_y: 0,
+    drag_state: false,
+    wheel_value: 0,
+    wheel_state: false
 }
 
 const obj = {
     mesh: null,
     model: mat4.create(),
-    temp: mat4.create(), //model_view
+    temp: mat4.create() //model_view
 }
 
 init();
@@ -88,6 +98,7 @@ function initWebGLView(container_id)
 
 // This function inits the button functions
 function initListeners(){
+    // Buttons
     var optButton = document.getElementById("options");
     var viewShader = document.getElementById("viewShader");
     var helpButton = document.getElementById("help");
@@ -103,6 +114,7 @@ function initListeners(){
                 '<pre>' + Previous_VS + '</pre>' +
                 '<br /> <h3>Fragment Shader</h3>' +
                 '<pre>' + Previous_FS + '</pre>',
+            buttons: '<button class="w2ui-btn" onclick="downloadFile()">Dowload</button>',
             onOpen  : function () {
                 console.log('opened');
             }           
@@ -116,6 +128,47 @@ function initListeners(){
             width: 800,
             height: 600});
     }, false);
+
+    window.addEventListener("resize", this.resizeView.bind(this));
+
+    // Get mouse actions
+    gl.captureMouse(true);
+    gl.onmousemove = function(e)
+    {
+        mouse.button = e.buttons; // 1 left, 2 right, 4 middle
+        mouse.pos_x = e.canvasx;
+        mouse.pos_y = e.canvasy;
+        mouse.drag_state = e.dragging;
+        mouse.delta_x = e.deltax; // - 1 left to 1 right
+        mouse.delta_y = e.deltay; // - 1 top to 1 down
+    }
+    gl.onmouseup = function(e)
+    {
+        mouse.drag_state = false;
+        mouse.delta_x = 0;
+        mouse.delta_y = 0;
+    }
+    gl.onmousewheel = function(e)
+    {
+        mouse.wheel_value = e.wheel;
+	    mouse.wheel_state = true;
+    }
+    //gl.captureKeys(true); not used
+}
+
+function resizeView()
+{
+    var root = document.getElementById("editor");
+    var canvas = root.querySelector(".Graph");
+    canvas.height = root.offsetHeight;
+    canvas.width = root.offsetWidth;
+
+    root = document.getElementById("view-area");
+    canvas = root.querySelector(".View");
+    canvas.height = root.offsetHeight;
+    canvas.width = root.offsetWidth;
+    var rect = canvas.getBoundingClientRect();
+    gl.viewport(0, 0, rect.width, rect.height);
 }
 
 // This function reads the file that contains the shaders and store them
@@ -159,47 +212,17 @@ function graphTemplate()
 function createScene()
 {
     //camera settings
-    camera.cam_pos = new Float32Array([0,50,10]);
-    camera.cam_center = new Float32Array([0,0,0]);
-
-    //get mouse actions
-    gl.captureMouse(true);
-    gl.onmousemove = function(e) // ME FALTA EL ORBIT
-    {
-        if(!e.dragging)
-            return;
-        vec3.rotateY(camera.cam_pos,camera.cam_pos,e.deltax * 0.01);
-        camera.cam_pos[1] += e.deltay * 0.05;
-    }
-    gl.onmousewheel = function(e) // AUN NO VA COMO QUIERO
-    {
-        if(!e.wheel)
-            return;
-        var dir = new Float32Array(3);
-        vec3.subtract(dir, camera.cam_pos, camera.cam_center);
-        dir[2] += e.delta * -0.1;
-        vec3.add(camera.cam_pos, dir, camera.cam_center);
-    
-        mat4.lookAt(camera.view, camera.cam_pos, camera.cam_center, [0,1,0]);
-	    mat4.multiply(camera.mvp, camera.view, camera.proj);
-    }
-
-    //set the camera position
-    mat4.perspective(camera.proj, 45 * DEG2RAD, gl.canvas.width / gl.canvas.height, 0.1, 1000);
-    mat4.lookAt(camera.view, camera.cam_pos, camera.cam_center, [0,1,0]);
-
-    gl.captureKeys();
+    camera = new RD.Camera({position: [0,50,10], aspect: gl.canvas.width / gl.canvas.height});
 
     //create default mesh
-    // ha de ser size = 2 porque ira de 1 a -1 y ha de coordinar con la condicion de salida del shader (falta poner automatico)
-    obj.mesh = GL.Mesh.cube({size: 2});
+    obj.mesh = GL.Mesh.cube({size: 3});
 
     //adjust camera to mesh bounding
     if( obj.mesh != null )
     {
-        camera.cam_center = BBox.getCenter( obj.mesh.bounding );
+        camera._target = BBox.getCenter( obj.mesh.bounding );
         var r = BBox.getRadius( obj.mesh.bounding );
-        camera.cam_pos = vec3.add( camera.cam_pos, camera.cam_center, [0,r*0.5, r*3] );
+        camera._position = vec3.add( camera._position, camera._target, [0,r*0.5, r*3] );
     }
 
     //Basic shader while the parser hasn't read the other shaders yet
@@ -228,7 +251,7 @@ function createScene()
         }
         `;
         
-    //shader
+    //Basic shader
     shader = new Shader( VS, FS );
 }
 
@@ -239,35 +262,30 @@ function onLoad()
 {
     window.graph.runStep(); //falta mirar el callback
 
-	//update(dt);
+    time.last = time.now || 0;
+	time.now = getTime();
+	time.dt = (time.now - time.last) * 0.001;
+	update(time.dt);
     render();
 
-    requestAnimationFrame( this.onLoad.bind(this) );    
+    requestAnimationFrame(this.onLoad.bind(this));    
 }
 
 function render()
 {
     //clear
-    gl.clear( gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT );
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.clearColor(0.1,0.1,0.1,1);
 
     //generic gl flags and settings
-    gl.enable(gl.BLEND);
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
     gl.disable(gl.DEPTH_TEST);
     gl.disable(gl.CULL_FACE);
-
-    mat4.lookAt(camera.view, camera.cam_pos, camera.cam_center, [0,1,0]);
-
-    //create modelview and projection matrices
-    mat4.multiply(obj.temp, camera.view, obj.model);
-    mat4.multiply(camera.mvp, camera.proj, camera.view);
 
     var inv_model = mat4.create();
     mat4.invert(inv_model, obj.model);
 
     //get local camera position (makes it easier in the shader)
-    var aux_vec4 = vec4.fromValues(camera.cam_pos[0], camera.cam_pos[1], camera.cam_pos[2], 1);
+    var aux_vec4 = vec4.fromValues(camera._position[0], camera._position[1], camera._position[2], 1);
     vec4.transformMat4(aux_vec4, aux_vec4, inv_model);
     var local_cam_pos = vec3.fromValues(aux_vec4[0]/aux_vec4[3], aux_vec4[1]/aux_vec4[3], aux_vec4[2]/aux_vec4[3]);
 
@@ -276,16 +294,73 @@ function render()
         //render mesh using the shader
         if(obj.mesh)
         shader.uniforms({
-            u_color: [0,0,1,1],
-            u_camera_position: camera.cam_pos,
+            u_color: [0,0,0,1],
+            u_camera_position: camera._position,
             u_local_camera_position: local_cam_pos,
             u_model: obj.model,
-            u_mvp: camera.mvp,
-            u_quality: 100.0,
+            u_obj_size: obj.mesh.size/2.0,
+            u_mvp: camera._viewprojection_matrix,
+            u_quality: 100.0
         }).draw(obj.mesh);
     }
 }
 
+function update(dt)
+{
+    updateCamera(dt);
+}
+
+function updateCamera(dt)
+{
+
+    if (gl.mouse.left_button || gl.mouse.right_button) //orbit
+    {
+        if (mouse.drag_state)
+        {
+            var yaw = -mouse.delta_x * dt * 0.7;
+            var pitch = -mouse.delta_y * dt * 0.7;
+            orbitCamera(yaw, pitch);
+            
+            mouse.drag_state = false;
+        } 
+    }
+    if (mouse.wheel_state) //zoom
+    {
+        zoomCamera(dt);
+        mouse.wheel_state = false;
+    }
+    
+    //update camera
+    mat4.lookAt(camera._view_matrix, camera._position, camera._target, [0,1,0]);
+    mat4.perspective(camera._projection_matrix, camera._fov * DEG2RAD, camera._aspect, 0.1, 1000);
+
+    //update modelview and projection matrices
+    mat4.multiply(obj.temp, camera._view_matrix, obj.model);
+    mat4.multiply(camera._viewprojection_matrix, camera._projection_matrix, camera._view_matrix);
+}
+
+function orbitCamera(yaw, pitch)
+{
+    camera.orbit(yaw, camera._up);
+
+    var front = vec3.create();
+    vec3.subtract(front, camera._target, camera._position)
+    vec3.normalize(front, front);
+    var up = vec3.clone(camera._up);
+    vec3.normalize(up, up);
+    var problem_angle = vec3.dot(front, up);
+    if(!((problem_angle > 0.99 && pitch > 0) || (problem_angle < -0.99 && pitch < 0)))
+    {
+        var right = vec3.create();
+        camera.getLocalVector([1.0, 0, 0], right);
+        camera.orbit(pitch, right);
+    }
+}
+
+function zoomCamera(dt)
+{
+    camera._fov += -mouse.wheel_value * dt;
+}
 
 // ---------------------------------------- PANEL ----------------------------------------------- //
 
@@ -530,3 +605,31 @@ function createPanel(title, options)
 
     return root;
 };
+
+
+// ---------------------------------------- DOWNLOAD ----------------------------------------------- //
+
+function downloadFile()
+{
+    var body = `\\volume.vs
+` + Previous_VS + `
+        
+\\volume.fs
+` + Previous_FS;
+    downloadString(body, "text/glsl", "shader_atlas.glsl");
+}
+
+function downloadString(text, fileType, fileName) 
+{
+    var blob = new Blob([text], { type: fileType });
+  
+    var a = document.createElement('a');
+    a.download = fileName;
+    a.href = URL.createObjectURL(blob);
+    a.dataset.downloadurl = [fileType, a.download, a.href].join(':');
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function() { URL.revokeObjectURL(a.href); }, 1500);
+  }
