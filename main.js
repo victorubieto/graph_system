@@ -9,6 +9,13 @@ var gl;
 
 var camera = null;
 
+const options = {
+    quality: 100.0,
+    color_bg: [0.5,0.5,0.5,1.0],
+    color_mesh: [1.0,0.0,0.0,1.0],
+    brightness: 1.0
+}
+
 const time = {
     last: 0,
     now: null,
@@ -101,9 +108,36 @@ function initListeners(){
     // Buttons
     var optButton = document.getElementById("options");
     var viewShader = document.getElementById("viewShader");
-    var helpButton = document.getElementById("help");
+    var aboutButton = document.getElementById("about");
 
     optButton.addEventListener("click", function(){
+        w2popup.open({
+            width: 300, height: 300,
+            title: 'Visualization Options',
+            body: `<div style="padding-left:30px;"> 
+            <br /> <br />
+            <p>Background Color</p> <input id="in_bgcolor" class="color" onchange="updateOptions(this.id)">
+            <script>    
+                var elem = document.getElementById('in_bgcolor');
+                var color = new jscolor.color(elem, {rgb: options.color_bg});
+            </script>
+            <br /> <br />
+            <p>Mesh Color (if no rendering algorithm)</p> <input id="in_objcolor" class="color" onchange="updateOptions(this.id)">
+            <script>    
+                var elem = document.getElementById('in_objcolor');
+                var color = new jscolor.color(elem, {rgb: options.color_mesh});
+            </script>
+            <br /> <br />
+            <p>Quality</p> <input id="in_quality" class="w2ui-btn" onchange="updateOptions(this.id)" style="height:20px;"></input>
+            <script> document.getElementById('in_quality').value = options.quality; </script>
+            <br /> <br />
+            <p>Brightness</p> <input id="in_brightness" class="w2ui-btn" onchange="updateOptions(this.id)" style="height:20px;"></input>
+            <script> document.getElementById('in_brightness').value = options.brightness; </script>
+            </div>`,
+            onOpen  : function () {
+                console.log('opened');
+            }           
+        });
     }, false);
 
     viewShader.addEventListener("click", function(){
@@ -114,19 +148,19 @@ function initListeners(){
                 '<pre>' + Previous_VS + '</pre>' +
                 '<br /> <h3>Fragment Shader</h3>' +
                 '<pre>' + Previous_FS + '</pre>',
-            buttons: '<button class="w2ui-btn" onclick="downloadFile()">Dowload</button>',
+            buttons: '<button class="w2ui-btn" onclick="downloadFile()">Download</button>',
             onOpen  : function () {
                 console.log('opened');
             }           
         });
     }, false);
 
-    helpButton.addEventListener("click", function(){
+    aboutButton.addEventListener("click", function(){
         w2popup.load({ 
-            url: 'help.html',
+            url: 'readme.html',
             showMax: true,
-            width: 800,
-            height: 600});
+            width: 600,
+            height: 500});
     }, false);
 
     window.addEventListener("resize", this.resizeView.bind(this));
@@ -156,6 +190,23 @@ function initListeners(){
     //gl.captureKeys(true); not used
 }
 
+function updateOptions(id)
+{ 
+    if (id == "in_bgcolor") options.color_bg = hexToRgb(document.getElementById('in_bgcolor').value);
+    if (id == "in_objcolor") options.color_mesh = hexToRgb(document.getElementById('in_objcolor').value);
+    if (id == "in_quality") options.quality = document.getElementById('in_quality').value;
+    if (id == "in_brightness") options.brightness = document.getElementById('in_brightness').value;
+}
+
+function hexToRgb(hex) {
+    var conversion = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    var result = [0,0,0]; //init
+    result[0] = parseInt(conversion[1], 16)/128;
+    result[1] = parseInt(conversion[2], 16)/128;
+    result[2] = parseInt(conversion[3], 16)/128;
+    return result;
+  }
+
 function resizeView()
 {
     var root = document.getElementById("editor");
@@ -182,30 +233,51 @@ function loadShaderTemplates()
 // Basic Template that inits the web with the essential nodes
 function graphTemplate()
 {
-    // Al final lo ordenare para dejar los que se van a quedar predeterminados!!!
     var node_color = LiteGraph.createNode("Input/Color");
-    node_color.pos = [50,200];
+    node_color.pos = [100,100];
     graph.add(node_color);
 
-    var node_num = LiteGraph.createNode("Input/Number");
-    node_num.pos = [50,300];
-    graph.add(node_num);
+    var node_math = LiteGraph.createNode("Operator/Math");
+    node_math.pos = [150,200];
+    node_math.properties.OP = "*";
+    graph.add(node_math);
+
+    var node_noise = LiteGraph.createNode("Texture/Noise");
+    node_noise.pos = [50,330];
+    node_noise.properties.scale = 2.0;
+    node_noise.properties.detail = 3;
+    graph.add(node_noise);
+    if(node_noise.properties.detail > 1) options.quality -= 70;
+
+    var node_rot = LiteGraph.createNode("Operator/Rotate");
+    node_rot.pos = [400,500];
+    node_rot.properties._Z = -90.0;
+    graph.add(node_rot);
+
+    var node_tra = LiteGraph.createNode("Operator/Translate");
+    node_tra.pos = [100,530];
+    node_tra.properties._Y = 1.0;
+    graph.add(node_tra);
+
+    var node_grad = LiteGraph.createNode("Texture/Gradient");
+    node_grad.pos = [350,350];
+    graph.add(node_grad);
 
     var node_volume = LiteGraph.createNode("Shader/Volume");
-    node_volume.pos = [300,200];
+    node_volume.pos = [350,150];
     graph.add(node_volume);
 
     var node_out = LiteGraph.createNode("Output/Final");
-    node_out.pos = [550,200];
+    node_out.pos = [600,200];
     graph.add(node_out);
-
-    var node_dicom = LiteGraph.createNode("Texture/Dicom");
-    node_dicom.pos = [350,400];
-    graph.add(node_dicom);
 
     //Connections
     node_color.connect(0, node_volume, 0);
-    node_num.connect(0, node_volume, 1);
+    node_math.connect(0, node_volume, 1);
+    node_noise.connect(1, node_math, 0);
+    node_tra.connect(0, node_rot, 0);
+    node_rot.connect(0, node_grad, 0);
+    node_grad.connect(1, node_math, 1);
     node_volume.connect(0, node_out, 1);   
 }
 
@@ -245,6 +317,8 @@ function createScene()
         varying vec3 v_normal;
         uniform vec4 u_camera_position;
         uniform vec4 u_color;
+
+        uniform vec3 u_vertex;
         void main() {
             vec4 final_color = u_color;
             gl_FragColor = vec4( final_color.xyz, 1.0 );
@@ -275,11 +349,12 @@ function render()
 {
     //clear
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    gl.clearColor(0.1,0.1,0.1,1);
+    gl.clearColor(options.color_bg[0], options.color_bg[1], options.color_bg[2], options.color_bg[3]);
 
     //generic gl flags and settings
     gl.disable(gl.DEPTH_TEST);
-    gl.disable(gl.CULL_FACE);
+    //gl.disable(gl.CULL_FACE);
+    gl.cullFace(gl.BACK);
 
     var inv_model = mat4.create();
     mat4.invert(inv_model, obj.model);
@@ -294,13 +369,14 @@ function render()
         //render mesh using the shader
         if(obj.mesh)
         shader.uniforms({
-            u_color: [0,0,0,1],
             u_camera_position: camera._position,
             u_local_camera_position: local_cam_pos,
             u_model: obj.model,
             u_obj_size: obj.mesh.size/2.0,
             u_mvp: camera._viewprojection_matrix,
-            u_quality: 100.0
+            u_color: options.color_mesh,
+            u_quality: options.quality,
+            u_brightness: options.brightness
         }).draw(obj.mesh);
     }
 }

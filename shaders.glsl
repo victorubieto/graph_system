@@ -26,7 +26,7 @@ void main() {
 }
 
 
-\volume.vs
+\volumeVS
 
 precision highp float;
 attribute vec3 a_vertex;
@@ -46,7 +46,7 @@ void main() {
 }
 
 
-\volume1.fs
+\FSUniforms
 
 precision highp float;
 varying vec3 v_pos;
@@ -55,25 +55,30 @@ varying vec2 v_uv;
 uniform vec3 u_camera_position;
 uniform vec3 u_local_camera_position;
 uniform vec4 u_color;
+uniform float u_time;
+uniform float u_quality;
+uniform float u_brightness;
 
-\volume2.fs
+\FSVoxelFunc
 
 vec4 getVoxel()
 {
-    // TO DO
+
+\FSMain
+
     return vec4(0.0);
 }
 
 void main() {
     vec4 final_color = vec4(0.0);
 
-\volume3.fs    
+\FSReturn
 
-    gl_FragColor = final_color;
+    gl_FragColor = final_color * u_brightness;
 }
 
 
-\PerlinNoiseFunctions
+\Noise2
 
 vec4 permute( vec4 x ) {return mod(((x*34.0)+1.0)*x, 289.0);}
 vec4 taylorInvSqrt( vec4 r ) {return 1.79284291400159 - 0.85373472095314 * r;}
@@ -180,6 +185,136 @@ float cnoise( vec3 P )
                 noise3D(P + rand(1.0)) * distortion,
                 noise3D(P + rand(2.0)) * distortion);
     }
+
+    return fractal_noise(P);
+}
+
+
+\ColorRamp
+
+vec4 colorRamp(float fac, float clamp_min, float clamp_max){
+    float value;
+    if ( fac < 0.5 ){
+        value = clamp(fac, 0.0, clamp_min);
+    }
+    else{
+        value =  clamp(fac, clamp_max, 1.0);
+    }
+    return vec4(vec3(value), 1.0);
+}
+
+
+\Translate
+
+vec3 setTranslation(vec3 vector, float x, float y, float z){
+    return vector + vec3(x, y, z);
+}
+
+
+\Scale
+
+vec3 setScale(vec3 vector, float x, float y, float z){
+    return vector * vec3(x, y, z);
+}
+
+
+\Rotate
+
+#define M_PI 3.1415926535897932384626433832795        
+vec3 setRotation(vec3 vector, float x, float y, float z){
+    vec3 rad = vec3(x, y, z) * (M_PI / 180.0);
+
+    //around X
+    vec3 result1;
+    result1.x = vector.x;
+    result1.y = vector.y * cos(rad.x) - vector.z * sin(rad.x);
+    result1.z = vector.y * sin(rad.x) + vector.z * cos(rad.x);
+    //around Y
+    vec3 result2;
+    result2.x = result1.x * cos(rad.y) + result1.z * sin(rad.y);
+    result2.y = result1.y;
+    result2.z = result1.z * cos(rad.y) - result1.x * sin(rad.y);
+    //around Z
+    vec3 result3;
+    result3.x = result2.x * cos(rad.z) - result2.y * sin(rad.z);
+    result3.y = result2.x * sin(rad.z) + result2.y * cos(rad.z);
+    result3.z = result2.z;
+    
+    return result3;
+}
+
+
+\Noise
+
+float hash1( float n )
+{
+    return fract( n*17.0*fract( n*0.3183099 ) );
+}
+
+float noise( vec3 x )
+{
+    vec3 p = floor(x);
+    vec3 w = fract(x);
+    
+    vec3 u = w*w*w*(w*(w*6.0-15.0)+10.0);
+    
+    float n = p.x + 317.0*p.y + 157.0*p.z;
+    
+    float a = hash1(n+0.0);
+    float b = hash1(n+1.0);
+    float c = hash1(n+317.0);
+    float d = hash1(n+318.0);
+    float e = hash1(n+157.0);
+	float f = hash1(n+158.0);
+    float g = hash1(n+474.0);
+    float h = hash1(n+475.0);
+
+    float k0 =   a;
+    float k1 =   b - a;
+    float k2 =   c - a;
+    float k3 =   e - a;
+    float k4 =   a - b - c + d;
+    float k5 =   a - c - e + g;
+    float k6 =   a - b - e + f;
+    float k7 = - a + b + c - d + e - f - g + h;
+
+    return -1.0+2.0*(k0 + k1*u.x + k2*u.y + k3*u.z + k4*u.x*u.y + k5*u.y*u.z + k6*u.z*u.x + k7*u.x*u.y*u.z);
+}
+
+#define MAX_OCTAVES 16
+
+float fractal_noise(vec3 P)
+{
+    float fscale = 1.0;
+    float amp = 1.0;
+    float sum = 0.0;
+    float octaves = clamp(detail, 0.0, 16.0);
+    int n = int(octaves);
+
+    for (int i = 0; i <= MAX_OCTAVES; i++) {
+        if (i > n) continue;
+        float t = noise(fscale * P);
+        sum += t * amp;
+        amp *= 0.5;
+        fscale *= 2.0;
+    }
+
+    return sum;
+}
+
+float cnoise( vec3 P )
+{
+    P *= scale;
+
+    if (u_time != 0.0) //controlled with a flag
+        P += u_time;
+    
+    // if (distortion != 0.0) { // not used due to the computational cost
+    //     float value = noise(P);
+    //     P += vec3(noise(P + rand(0)) * distortion,
+    //             noise(P + rand(1)) * distortion,
+    //             noise(P + rand(2)) * distortion);
+    // }
 
     return fractal_noise(P);
 }

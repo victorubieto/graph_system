@@ -105,6 +105,7 @@ addNewNodes = function()
     // ------------------------------------------ TexCoord Node ------------------------------------------ //
     function TexCoord() 
     {
+        this.addOutput("Generated","vector");
         this.addOutput("Normal","vector");
         this.addOutput("UV","vector");
         this.addOutput("Object","vector");
@@ -119,10 +120,11 @@ addNewNodes = function()
         if (!isConnected(this, "Output"))
             return;
 
-        this.setOutputData(0, "v_normal");
-        this.setOutputData(1, "v_uv"); //vec2
-        this.setOutputData(2, "v_pos");
-        this.setOutputData(3, "u_camera_position");
+        this.setOutputData(0, "sample_pos"); // de -1 a 1
+        this.setOutputData(1, "v_normal"); // de -1 a 1
+        this.setOutputData(2, "vec3(v_uv, 1.0)"); // de 0 a 1
+        this.setOutputData(3, "v_pos"); // de -1 a 1
+        this.setOutputData(4, "u_camera_position"); // uniform del shader
     };
 
     LiteGraph.registerNodeType("Input/TexCoord", TexCoord);
@@ -134,10 +136,26 @@ addNewNodes = function()
         this.addInput("Vector", "vector");
         this.addOutput("Color", "color");
         this.addOutput("Fac", "value");
+
+        this.properties = {
+            type: "Linear"
+        }
+        this.widget = this.addWidget(
+            "combo",
+            "Type",
+            this.properties.type,
+            this.setValue.bind(this),
+            {values: ["Linear", "Quadratic", "Diagonal", "Spherical"]}
+        );
     }
 
     Gradient.title = "Gradient";
     Gradient.desc = "creates a gradient effect for a chosen vector";
+
+    Gradient.prototype.setValue = function(v)
+    {
+        this.properties.type = v;
+    };
 
     Gradient.prototype.onExecute = function()
     {
@@ -145,13 +163,19 @@ addNewNodes = function()
             return;
 
         var vector = this.getInputData(0);
-        if(vector === undefined)
+        if (vector === undefined)
             vector = "sample_pos";
 
-        if (vector == "v_uv")
-            var gradientRGB_code = `` + vector + `.xy, 1.0, 1.0`;
-        else var gradientRGB_code = `` + vector + `.xyz, 1.0`;
-        var gradient_code = `` + vector + `.x`;
+        if (this.properties.type == "Linear")
+            var gradient_code = "clamp(" + vector + ".x, 0.0, 1.0)";
+        else if (this.properties.type == "Quadratic")
+            var gradient_code = "clamp(max(" + vector + ".x, 0.0) * max(" + vector + ".x, 0.0), 0.0, 1.0)";
+        else if (this.properties.type == "Diagonal")
+            var gradient_code = "clamp((" + vector + ".x +" + vector + ".y) * 0.5, 0.0, 1.0)";
+        else if (this.properties.type == "Spherical")
+            var gradient_code = "clamp(max(1.0 - sqrt(" + vector + ".x * " + vector + ".x + " + vector + ".y * " + vector + ".y + " + vector + ".z * " + vector + ".z), 0.0), 0.0, 1.0)";
+
+        var gradientRGB_code = "vec4(vec3(" + gradient_code + "), 1.0)";
 
         this.setOutputData(0, gradientRGB_code);
         this.setOutputData(1, gradient_code);
@@ -185,6 +209,7 @@ addNewNodes = function()
             this.setDetail.bind(this),
             {values: [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]}
         );
+        this.toggle = this.addWidget("toggle","Movement", false, function(v){}, { on: "enabled", off:"disabled"} );
     }
     
     Noise.title = "Noise";
@@ -208,13 +233,15 @@ addNewNodes = function()
         shader.setUniform("scale", this.properties.scale);
         shader.setUniform("detail", this.properties.detail);
         shader.setUniform("distortion", 0.0); // en mi pc si uso esto me va a 1 fps como mucho
+        if (this.toggle.value) shader.setUniform("u_time", time.now/1000);
+        else shader.setUniform("u_time", 0.0);
 
         var vector = this.getInputData(0);
         if(vector === undefined) 
             vector = "sample_pos";
 
-        var noiseRGB_code = `cnoise(` + vector + `)`;
-        var noise_code = `cnoise(` + vector + `)`;
+        var noise_code = "cnoise(" + vector + ")";
+        var noiseRGB_code = "vec4(vec3(" + noise_code + "), 1.0)";
 
         // noise en 2D
         //return vec4(fract(sin(dot(local_pos.xy, vec2(12.9898,78.233)))* 43758.5453123));
@@ -234,7 +261,7 @@ addNewNodes = function()
         this.addOutput("Alpha", "value");
 
         this.properties = {
-            volume: null
+            volume: null,
         };
     }
 
@@ -290,7 +317,9 @@ addNewNodes = function()
             panel.content.appendChild(elem);
             
             // CREAR EL VOLUM COMPATIBLE EN WEBGL 1 (unsigned, ordre, ...) a partir del response.volume
+
             // UPDATES (creare textures, etc...), canviar la funcio createTexture de VOLUME per que utilitzi texturas 2D
+            var texture = this.createTexture(); // create texture 2d
         }
         else if(response.status == VolumeLoader.ERROR){
             console.log("Error: ", response.explanation);
@@ -305,6 +334,114 @@ addNewNodes = function()
         }
     };
 
+    Dicom.prototype.createTexture = function(options){
+        options = options || {};
+        var volume = this.properties.volume;
+    
+        var width = parseInt(volume.width);
+        var height = parseInt(volume.height);
+        var depth = parseInt(volume.depth);
+        var channels = parseInt(volume.voxelChannels);
+        var data = volume._data;
+    
+        //Check dimensions and data
+        if(width < 1 || height < 1 || depth < 1){
+            console.warn("Volume dimensions must be positive");
+            return null;
+        }
+    
+        if(data == null){
+            console.warn("Creating texture without data");
+        }else if(data.length != width*height*depth*channels){
+            console.warn("Volume size does not match with data size");
+            return null;
+        }
+    
+        //Cannot be overrided from outside volume info
+        options.depth = depth;
+        options.pixel_data = data;
+        options.texture_type = gl.TEXTURE_2D;
+        
+        //Check https://www.khronos.org/registry/webgl/specs/latest/2.0/#3.7.6 texImage2D to see possible combinations for format, type and internalFormat
+        //For example for pre-computed gradients {format: gl.RGB, type: gl.UNSIGNED_BYTE, internalFormat: gl.RGB8}
+        var guessParams = this.guessTextureParams();
+    
+        options.format = options.format || guessParams.format;
+        options.type = options.type || guessParams.type;
+        options.internalFormat = options.internalFormat || guessParams.internalFormat;
+        options.minFilter = options.minFilter || gl.NEAREST;
+        options.magFilter = options.magFilter || gl.NEAREST;
+        options.wrap = options.wrap || gl.CLAMP_TO_EDGE;
+    
+        var max_tex_dim = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+        if (width * depth > max_tex_dim)
+        {
+            var width_images = Math.floor(max_tex_dim / width);
+            var tex_width = width_images * width; //final width size of the 2d texture
+            var heigth_images = Math.ceil(depth / width_images)
+            var tex_height = heigth_images * height; //final height size of the 2d texture
+        }
+        else
+        {
+            var width_images = depth;
+            var tex_width = depth * width;
+            var heigth_images = 1.0;
+            var tex_height = height;
+        }
+
+       var texture = new GL.Texture(tex_width, tex_height, options);
+
+        //guardar la data a la textura 2d
+        for (var k = 0; k < heigth_images; k += height)
+            for (var j = 0; j < width_images; j += width)
+                for (var i = 0; i < height; i++)
+                    //texture.data[j, [k, i + width]] = volume._data.slice(i * width, i * width + width); //uploadData()???
+
+        return texture;
+    }
+
+    Dicom.prototype.guessTextureParams = function(){
+        var volume = this.properties.volume;
+        var bytes = volume.voxelBytes;
+        var channels = volume.voxelChannels;
+        var type = volume.voxelType;
+    
+        var guess = {
+            typeString: "",
+            formatString: "",
+            internalFormatString: "",
+            type: null,
+            format: null,
+            internalFormat: null
+        };
+    
+        guess.formatString = (channels == 1 ? "RED" : channels == 2 ? "RG" : channels == 3 ? "RGB" : "RGBA");
+        guess.internalFormatString = (channels == 1 ? "R" : channels == 2 ? "RG" : channels == 3 ? "RGB" : "RGBA") + (bytes == 1 ? "8" : bytes == 2 ? "16" : "32");
+    
+        switch(type){
+            case "UI":
+                guess.typeString = "UNSIGNED_";
+                guess.internalFormatString += "U";
+            case "I":
+                guess.typeString += (bytes == 1 ? "BYTE" : bytes == 2 ? "SHORT" : "INT");
+                guess.formatString += "_INTEGER";
+                guess.internalFormatString += "I";
+                break;
+            case "F":
+                guess.typeString = "FLOAT";	//1byte can't be float, 2 and 4 bytes can pass a FloatArray (there aren't HalfFloatArrays in JS)
+                break;
+            default:
+                guess.typeString = "UNSIGNED_BYTE";
+                break;
+        }
+    
+        guess.type = gl[guess.typeString];
+        guess.format = gl[guess.formatString];
+        guess.internalFormat = gl[guess.internalFormatString];
+    
+        return guess;
+    }
+
     Dicom.prototype.onExecute = function()
     {
         if (!isConnected(this, "Output"))
@@ -317,7 +454,7 @@ addNewNodes = function()
         if(vec === undefined)
             vec = "v_uv";
 
-        var CODIGO = `getVoxel(`+ vec + `)`;
+        var CODIGO = "getVoxel(" + vec + ")";
 
         this.setOutputData(0, "texture2D( u_texture, " + vec + " )"); //cuidado si en algun momento necesito mas de una imagen
         this.setOutputData(1, "texture2D( u_texture, " + vec + " ).a");
@@ -329,9 +466,9 @@ addNewNodes = function()
     // ------------------------------------------ Math Node ------------------------------------------ //
     function MathOperation() 
     {
-        this.addInput("A", "number");
-        this.addInput("B", "number");
-        this.addOutput("=", "number");
+        this.addInput("A", "value");
+        this.addInput("B", "value");
+        this.addOutput("=", "value");
         this.addProperty("A", 1);
         this.addProperty("B", 1);
         this.addProperty("OP", "+", "enum", { values: MathOperation.values });
@@ -363,49 +500,67 @@ addNewNodes = function()
         this.properties["value"] = v;
     };
 
+    MathOperation.prototype.toString = function(input)
+    {
+        if (input == null) {
+            return "null";
+        } else if (input.constructor === Number) {
+            return input.toFixed(1);
+        } else if (input.constructor === Array) {
+            var str = "";
+            for (var i = 0; i < (input.length - 1); ++i) {
+                if (input[i] % 1 != 0) //check if is decimal or not
+                    str += input[i].toFixed(1) + ",";
+                else
+                    str += input[i] + ".0,";
+            }
+            str += input[i] + ".0";
+            return str;
+        } else {
+            return String(input);
+        }
+    }
+
     MathOperation.prototype.onExecute = function() 
     {
+        if (!isConnected(this, "Output"))
+            return;
+
         var A = this.getInputData(0);
-        var B = this.getInputData(1);
-        if (A != null) {
-            this.properties["A"] = A;
-        } else {
+        if (A == null)
             A = this.properties["A"];
-        }
+        A = this.toString(A);
 
-        if (B != null) {
-            this.properties["B"] = B;
-        } else {
-            B = this.properties["B"];
-        }
+        var B = this.getInputData(1);
+        if (B == null) 
+            B = this.toString(this.properties["B"]);
+        B = this.toString(B);
 
-        var result = 0;
+        var result = "";
         switch (this.properties.OP) {
             case "+":
-                result = A + B;
+                result = A + " + " +  B;
                 break;
             case "-":
-                result = A - B;
+                result = A + " - " + B;
                 break;
-            case "x":
-            case "X":
             case "*":
-                result = A * B;
+                result = A + " * " + B;
                 break;
             case "/":
-                result = A / B;
+                result = A + " / " + B;
                 break;
             case "%":
                 result = A % B;
                 break;
             case "^":
-                result = Math.pow(A, B);
+                result = "pow(" + A + "," + B + ")";
                 break;
             case "max":
-                result = Math.max(A, B);
+                result = "max(" + A + "," + B + ")";
                 break;
             case "min":
-                result = Math.min(A, B);
+                result = "min(" + A + "," + B + ")";
                 break;
             default:
                 console.warn("Unknown operation: " + this.properties.OP);
@@ -432,18 +587,6 @@ addNewNodes = function()
 
     LiteGraph.registerNodeType("Operator/Math", MathOperation);
 
-    LiteGraph.registerSearchboxExtra("Operator/Math", "MAX", 
-    {
-        properties: {OP:"max"},
-        title: "MAX()"
-    });
-
-    LiteGraph.registerSearchboxExtra("Operator/Math", "MIN", 
-    {
-        properties: {OP:"min"},
-        title: "MIN()"
-    });
-
 
     // ------------------------------------------ MixRGB Node ------------------------------------------ //
     function MixColor()
@@ -463,6 +606,7 @@ addNewNodes = function()
         this.addInput("Color", "color");
         this.addInput("Color", "color");
         this.addOutput("Color", "color");
+        this.addOutput("Fac", "value");
     }
 
     MixColor.title = "MixRGB";
@@ -522,44 +666,409 @@ addNewNodes = function()
         else 
             if (color2.constructor === Array)
                 color2 = this.toString(color2);
-        
-        // vec4.scale(color1, color1, (1.0-fac));
-        // vec4.scale(color2, color2, fac);
-        // var color_result = vec4.create();
-        // vec4.add(color_result, color1, color2);
 
-        //var a = `mix(vec4(` + color1 + `) * (1.0 - ` + fac + `), vec4(` + color2 + `) * ` + fac + `)`;
-        var color_result = `mix(vec4(` + color1 + `), vec4(` + color2 + `), ` + fac + `)`;
+        var mixRGB_result = "mix(vec4(" + color1 + "), vec4(" + color2 + "), " + fac + ")";
+        var mix_result = mixRGB_result + ".x";
 
-        this.setOutputData(0, "" + color_result + "");
+        this.setOutputData(0, mixRGB_result);
+        this.setOutputData(1, mix_result);
     }
 
     LiteGraph.registerNodeType("Operator/MixRGB", MixColor);
 
     
-    // ------------------------------------------ Node ------------------------------------------ //
-    function ColorRamp(a,b)
+    // ------------------------------------------ ColorRamp Node ------------------------------------------ //
+    function ColorRamp()
     {
-        return a+b;
+        this.addInput("Value", "value");
+        this.addOutput("Color", "color");
+        this.addOutput("Fac", "value");
+
+        this.properties = {
+            min_value: 0.5,
+            max_value: 0.5
+        }
+        this.widgetMin = this.addWidget(
+            "number",
+            "Min_Value",
+            this.properties.min_value,
+            this.setMinValue.bind(this),
+            {min: 0.0, max: 0.5}
+        );
+        this.widgetMax = this.addWidget(
+            "number",
+            "Max_value",
+            this.properties.max_value,
+            this.setMaxValue.bind(this),
+            {min: 0.5, max: 1.0}
+        );
     }
 
-    LiteGraph.wrapFunctionAsNode("Operator/ColorRamp", ColorRamp, ["Number","Number"],"Number");
+    ColorRamp.title = "ColorRamp";
+    ColorRamp.desc = "discriminates values between limits";
 
-
-    function Mapping(a,b)
+    ColorRamp.prototype.setMinValue = function(v) 
     {
-        return a+b;
+        this.properties.min_value = v;
+    };
+
+    ColorRamp.prototype.setMaxValue = function(v) 
+    {
+        this.properties.max_value = v;
+    };
+
+    ColorRamp.prototype.toString = function(input)
+    {
+        if (input == null) {
+            return "null";
+        } else if (input.constructor === Number) {
+            return input.toFixed(1);
+        } else if (input.constructor === Array) {
+            var str = "";
+            for (var i = 0; i < (input.length - 1); ++i) {
+                if (input[i] % 1 != 0) //check if is decimal or not
+                    str += input[i].toFixed(1) + ",";
+                else
+                    str += input[i] + ".0,";
+            }
+            str += input[i] + ".0";
+            return str;
+        } else {
+            return String(input);
+        }
     }
 
-    LiteGraph.wrapFunctionAsNode("Operator/Mapping", Mapping, ["Number","Number"],"Number");
-
-
-    function TransferFunc(a,b)
+    ColorRamp.prototype.onExecute = function()
     {
-        return a+b;
+        if (!isConnected(this, "Output"))
+            return;
+
+        var input = this.getInputData(0);
+        if(input === undefined)
+            input = "0.0";
+
+        var rampRGB_code = "colorRamp("+ input + "," + this.toString(this.properties.min_value) + "," + this.toString(this.properties.max_value) + ")";
+        var ramp_code = rampRGB_code + ".x";
+
+        this.setOutputData(0, rampRGB_code);
+        this.setOutputData(1, ramp_code);
     }
 
-    LiteGraph.wrapFunctionAsNode("Operator/TransferFunc", TransferFunc, ["Number","Number"],"Number");
+    LiteGraph.registerNodeType("Operator/ColorRamp", ColorRamp);
+
+
+    // ------------------------------------------ Translate Node ------------------------------------------ //
+    function Translate()
+    {
+        this.addInput("Vector", "vector");
+        this.addOutput("Vector", "vector");
+
+        this.properties = {
+            _X: 0.0,
+            _Y: 0.0,
+            _Z: 0.0
+        };
+        this.widgetX = this.addWidget(
+            "number",
+            "X",
+            this.properties._X,
+            this.setX.bind(this),
+            {min: -100, max: 100}
+        );
+        this.widgetY = this.addWidget(
+            "number",
+            "Y",
+            this.properties._Y,
+            this.setY.bind(this),
+            {min: -100, max: 100}
+        );
+        this.widgetZ = this.addWidget(
+            "number",
+            "Z",
+            this.properties._Z,
+            this.setZ.bind(this),
+            {min: -100, max: 100}
+        );
+    }
+
+    Translate.title = "Translate";
+    Translate.desc = "basic operations for vectors";
+
+    Translate.prototype.setX = function(v) 
+    {
+        this.properties._X = v;
+    };
+
+    Translate.prototype.setY = function(v) 
+    {
+        this.properties._Y = v;
+    };
+
+    Translate.prototype.setZ = function(v) 
+    {
+        this.properties._Z = v;
+    };
+
+    Translate.prototype.toString = function(input)
+    {
+        if (input == null) {
+            return "null";
+        } else if (input.constructor === Number) {
+            return input.toFixed(1);
+        } else if (input.constructor === Array) {
+            var str = "";
+            for (var i = 0; i < (input.length - 1); ++i) {
+                if (input[i] % 1 != 0) //check if is decimal or not
+                    str += input[i].toFixed(1) + ",";
+                else
+                    str += input[i] + ".0,";
+            }
+            str += input[i] + ".0";
+            return str;
+        } else {
+            return String(input);
+        }
+    }
+
+    Translate.prototype.onExecute = function()
+    {
+        if (!isConnected(this, "Output"))
+            return;
+
+        var vector = this.getInputData(0);
+        if(vector === undefined)
+            vector = "sample_pos";
+
+        var x = this.toString(this.properties._X);
+        var y = this.toString(this.properties._Y);
+        var z = this.toString(this.properties._Z);
+
+        var translation_code = "setTranslation(" + vector + "," + x + "," + y + "," + z + ")";
+
+        this.setOutputData(0, translation_code);
+    }
+
+    LiteGraph.registerNodeType("Operator/Translate", Translate);
+
+
+    // ------------------------------------------ Scale Node ------------------------------------------ //
+    function Scale()
+    {
+        this.addInput("Vector", "vector");
+        this.addOutput("Vector", "vector");
+
+        this.properties = {
+            _X: 1.0,
+            _Y: 1.0,
+            _Z: 1.0
+        };
+        this.widgetX = this.addWidget(
+            "number",
+            "X",
+            this.properties._X,
+            this.setX.bind(this),
+            {min: 0, max: 100}
+        );
+        this.widgetY = this.addWidget(
+            "number",
+            "Y",
+            this.properties._Y,
+            this.setY.bind(this),
+            {min: 0, max: 100}
+        );
+        this.widgetZ = this.addWidget(
+            "number",
+            "Z",
+            this.properties._Z,
+            this.setZ.bind(this),
+            {min: 0, max: 100}
+        );
+    }
+
+    Scale.title = "Scale";
+    Scale.desc = "basic operations for vectors";
+
+    Scale.prototype.setX = function(v) 
+    {
+        this.properties._X = v;
+    };
+
+    Scale.prototype.setY = function(v) 
+    {
+        this.properties._Y = v;
+    };
+
+    Scale.prototype.setZ = function(v) 
+    {
+        this.properties._Z = v;
+    };
+
+    Scale.prototype.toString = function(input)
+    {
+        if (input == null) {
+            return "null";
+        } else if (input.constructor === Number) {
+            return input.toFixed(1);
+        } else if (input.constructor === Array) {
+            var str = "";
+            for (var i = 0; i < (input.length - 1); ++i) {
+                if (input[i] % 1 != 0) //check if is decimal or not
+                    str += input[i].toFixed(1) + ",";
+                else
+                    str += input[i] + ".0,";
+            }
+            str += input[i] + ".0";
+            return str;
+        } else {
+            return String(input);
+        }
+    }
+
+    Scale.prototype.onExecute = function()
+    {
+        if (!isConnected(this, "Output"))
+            return;
+
+        var vector = this.getInputData(0);
+        if(vector === undefined)
+            vector = "sample_pos";
+
+        var x = this.toString(this.properties._X);
+        var y = this.toString(this.properties._Y);
+        var z = this.toString(this.properties._Z);
+
+        var  scale_code = "setScale(" + vector + "," + x + "," + y + "," + z + ")";
+
+        this.setOutputData(0, scale_code);
+    }
+
+    LiteGraph.registerNodeType("Operator/Scale", Scale);
+
+
+    // ------------------------------------------ Rotate Node ------------------------------------------ //
+    function Rotate()
+    {
+        this.addInput("Vector", "vector");
+        this.addOutput("Vector", "vector");
+
+        this.properties = {
+            _X: 0.0,
+            _Y: 0.0,
+            _Z: 0.0
+        };
+        this.widgetX = this.addWidget(
+            "number",
+            "X",
+            this.properties._X,
+            this.setX.bind(this),
+            {min: -360, max: 360}
+        );
+        this.widgetY = this.addWidget(
+            "number",
+            "Y",
+            this.properties._Y,
+            this.setY.bind(this),
+            {min: -360, max: 360}
+        );
+        this.widgetZ = this.addWidget(
+            "number",
+            "Z",
+            this.properties._Z,
+            this.setZ.bind(this),
+            {min: -360, max: 360}
+        );
+    }
+
+    Rotate.title = "Rotate";
+    Rotate.desc = "basic operations for vectors (degrees)";
+
+    Rotate.prototype.setX = function(v) 
+    {
+        this.properties._X = v;
+    };
+
+    Rotate.prototype.setY = function(v) 
+    {
+        this.properties._Y = v;
+    };
+
+    Rotate.prototype.setZ = function(v) 
+    {
+        this.properties._Z = v;
+    };
+
+    Rotate.prototype.toString = function(input)
+    {
+        if (input == null) {
+            return "null";
+        } else if (input.constructor === Number) {
+            return input.toFixed(1);
+        } else if (input.constructor === Array) {
+            var str = "";
+            for (var i = 0; i < (input.length - 1); ++i) {
+                if (input[i] % 1 != 0) //check if is decimal or not
+                    str += input[i].toFixed(1) + ",";
+                else
+                    str += input[i] + ".0,";
+            }
+            str += input[i] + ".0";
+            return str;
+        } else {
+            return String(input);
+        }
+    }
+
+    Rotate.prototype.onExecute = function()
+    {
+        if (!isConnected(this, "Output"))
+            return;
+
+        var vector = this.getInputData(0);
+        if(vector === undefined)
+            vector = "sample_pos";
+
+        var x = this.toString(this.properties._X);
+        var y = this.toString(this.properties._Y);
+        var z = this.toString(this.properties._Z);
+
+        var  rotate_code = "setRotation(" + vector + "," + x + "," + y + "," + z + ")";
+
+        this.setOutputData(0, rotate_code);
+    }
+
+    LiteGraph.registerNodeType("Operator/Rotate", Rotate);
+
+
+    // ------------------------------------------ TransferFunc Node ------------------------------------------ //
+    function TransferFunc()
+    {
+        this.addInput("Fac", "value");
+        this.addOutput("Color", "color");
+        this.addOutput("Fac", "value");
+    }
+
+    TransferFunc.title = "TransferFunc";
+    TransferFunc.desc = "";
+
+    TransferFunc.prototype.onExecute = function()
+    {
+        if (!isConnected(this, "Output"))
+            return;
+
+        var vector = this.getInputData(0);
+        if(vector === undefined)
+            vector = "sample_pos";
+
+        if (vector == "v_uv")
+            var gradientRGB_code = `` + vector + `.xy, 1.0, 1.0`;
+        else var gradientRGB_code = `` + vector + `.xyz, 1.0`;
+        var gradient_code = `` + vector + `.x`;
+
+        this.setOutputData(0, gradientRGB_code);
+        this.setOutputData(1, gradient_code);
+    }
+
+    LiteGraph.registerNodeType("Operator/TransferFunc", TransferFunc);
 
 
     // ------------------------------------------ Volume Node ------------------------------------------ //
@@ -718,14 +1227,22 @@ addNewNodes = function()
         else {
             volume_uniforms = `
 uniform float u_obj_size;
-uniform float u_quality;
 uniform float u_cutvalue;
 uniform float scale;
 uniform float detail;
 uniform float distortion;
 `;
+
+            if (hasConnection(this, "Rotate"))
+                volume_uniforms += parsedFile["Rotate"];
+            if (hasConnection(this, "Translate"))
+                volume_uniforms += parsedFile["Translate"];
+            if (hasConnection(this, "Scale"))
+                volume_uniforms += parsedFile["Scale"];
             if (hasConnection(this, "Noise"))
-                volume_uniforms = volume_uniforms + parsedFile["PerlinNoiseFunctions"];
+                volume_uniforms += parsedFile["Noise"];
+            if (hasConnection(this, "ColorRamp"))
+                volume_uniforms += parsedFile["ColorRamp"];
         }	
 
         var displacement = this.getInputData(2);
@@ -736,9 +1253,10 @@ uniform float distortion;
         {
             //Create the final shader from the templates and the nodes
             //VS
-            var Node_VS_code = parsedFile["volume.vs"];
+            var Node_VS_code = parsedFile["volumeVS"];
             //FS
-            var Node_FS_code = parsedFile["volume1.fs"] + volume_uniforms + parsedFile["volume2.fs"] + volume + parsedFile["volume3.fs"];
+            var Node_FS_code = parsedFile["FSUniforms"] + volume_uniforms + parsedFile["FSVoxelFunc"] +
+                parsedFile["FSMain"] + volume + parsedFile["FSReturn"];
 
             if (Previous_VS !== Node_VS_code || Previous_FS !== Node_FS_code)
             {
