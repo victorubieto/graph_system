@@ -244,19 +244,20 @@ function graphTemplate()
 
     var node_noise = LiteGraph.createNode("Texture/Noise");
     node_noise.pos = [50,330];
-    node_noise.properties.scale = 2.0;
-    node_noise.properties.detail = 3;
+    node_noise.setScale(2.0);
+    node_noise.setDetail(3.0);
     graph.add(node_noise);
-    if(node_noise.properties.detail > 1) options.quality -= 70;
+    //reduce the quality if use noise due to the computational cost
+    if(node_noise.properties.detail > 1) options.quality -= 70; 
 
     var node_rot = LiteGraph.createNode("Operator/Rotate");
     node_rot.pos = [400,500];
-    node_rot.properties._Z = -90.0;
+    node_rot.setZ(-90.0);
     graph.add(node_rot);
 
     var node_tra = LiteGraph.createNode("Operator/Translate");
     node_tra.pos = [100,530];
-    node_tra.properties._Y = 1.0;
+    node_tra.setY(1.0);
     graph.add(node_tra);
 
     var node_grad = LiteGraph.createNode("Texture/Gradient");

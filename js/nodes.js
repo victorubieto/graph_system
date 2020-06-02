@@ -26,6 +26,7 @@ addNewNodes = function()
     NumberSelect.prototype.setValue = function(v) 
     {
         this.properties.value = v;
+        this.widget.value = v;
     };
 
     NumberSelect.prototype.onExecute = function() 
@@ -155,6 +156,7 @@ addNewNodes = function()
     Gradient.prototype.setValue = function(v)
     {
         this.properties.type = v;
+        this.widget.value = v;
     };
 
     Gradient.prototype.onExecute = function()
@@ -218,11 +220,13 @@ addNewNodes = function()
     Noise.prototype.setScale = function(v)
     {
         this.properties.scale = v;
+        this.widgetScale.value = v;
     };
 
     Noise.prototype.setDetail = function(v)
     {
         this.properties.detail = v;
+        this.widgetDetail.value = v;
     };
 
     Noise.prototype.onExecute = function()
@@ -615,6 +619,7 @@ addNewNodes = function()
     MixColor.prototype.setValue = function(v) 
     {
         this.properties.value = v;
+        this.widget.value = v;
     };
 
     MixColor.prototype.toString = function(input)
@@ -710,11 +715,13 @@ addNewNodes = function()
     ColorRamp.prototype.setMinValue = function(v) 
     {
         this.properties.min_value = v;
+        this.widgetMin.value = v;
     };
 
     ColorRamp.prototype.setMaxValue = function(v) 
     {
         this.properties.max_value = v;
+        this.widgetMax.value = v;
     };
 
     ColorRamp.prototype.toString = function(input)
@@ -797,16 +804,19 @@ addNewNodes = function()
     Translate.prototype.setX = function(v) 
     {
         this.properties._X = v;
+        this.widgetX.value = v;
     };
 
     Translate.prototype.setY = function(v) 
     {
         this.properties._Y = v;
+        this.widgetY.value = v;
     };
 
     Translate.prototype.setZ = function(v) 
     {
         this.properties._Z = v;
+        this.widgetZ.value = v;
     };
 
     Translate.prototype.toString = function(input)
@@ -891,16 +901,19 @@ addNewNodes = function()
     Scale.prototype.setX = function(v) 
     {
         this.properties._X = v;
+        this.widgetX.value = v;
     };
 
     Scale.prototype.setY = function(v) 
     {
         this.properties._Y = v;
+        this.widgetY.value = v;
     };
 
     Scale.prototype.setZ = function(v) 
     {
         this.properties._Z = v;
+        this.widgetZ.value = v;
     };
 
     Scale.prototype.toString = function(input)
@@ -985,16 +998,19 @@ addNewNodes = function()
     Rotate.prototype.setX = function(v) 
     {
         this.properties._X = v;
+        this.widgetX.value = v;
     };
 
     Rotate.prototype.setY = function(v) 
     {
         this.properties._Y = v;
+        this.widgetY.value = v;
     };
 
     Rotate.prototype.setZ = function(v) 
     {
         this.properties._Z = v;
+        this.widgetZ.value = v;
     };
 
     Rotate.prototype.toString = function(input)
