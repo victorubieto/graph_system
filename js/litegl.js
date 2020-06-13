@@ -1960,13 +1960,13 @@ quat.toEuler = function(out, quat) {
 	{
 		heading = 2 * Math.atan2(q[0],q[3]);
 		bank = 0;
-		attitude = 0; //¿?
+		attitude = 0; //ï¿½?
 	}
 	else if( (q[0]*q[1] + q[2]*q[3]) == 0.5 )
 	{
 		heading = -2 * Math.atan2(q[0],q[3]);
 		bank = 0;
-		attitude = 0; //¿?
+		attitude = 0; //ï¿½?
 	}
 	else
 	{
@@ -10397,7 +10397,7 @@ GL.create = function(options) {
 		if(skip_reverse)
 			return canvas;
 
-		//flip image 
+		//flip image
 		var final_canvas = createCanvas(areax,areay);
 		var ctx = final_canvas.getContext("2d");
 		ctx.translate(0,areay);
@@ -11321,8 +11321,8 @@ global.geo = {
 		var dd = vec3.dot(d, d);
 
 		// Test if segment fully outside either endcap of cylinder
-		if (md < 0.0 && md + nd < 0.0) return false; // Segment outside ’p’ side of cylinder
-		if (md > dd && md + nd > dd) return false; // Segment outside ’q’ side of cylinder
+		if (md < 0.0 && md + nd < 0.0) return false; // Segment outside ï¿½pï¿½ side of cylinder
+		if (md > dd && md + nd > dd) return false; // Segment outside ï¿½qï¿½ side of cylinder
 
 		var nn = vec3.dot(n, n);
 		var mn = vec3.dot(m, n);
@@ -11334,15 +11334,15 @@ global.geo = {
 		{
 			// Segment runs parallel to cylinder axis
 			if (c > 0.0) return false;
-			// ’a’ and thus the segment lie outside cylinder
+			// ï¿½aï¿½ and thus the segment lie outside cylinder
 			// Now known that segment intersects cylinder; figure out how it intersects
 			if (md < 0.0) t = -mn/nn;
-			// Intersect segment against ’p’ endcap
+			// Intersect segment against ï¿½pï¿½ endcap
 			else if (md > dd)
 				t=(nd-mn)/nn;
-			// Intersect segment against ’q’ endcap
+			// Intersect segment against ï¿½qï¿½ endcap
 			else t = 0.0;
-			// ’a’ lies inside cylinder
+			// ï¿½aï¿½ lies inside cylinder
 			if(result) 
 				vec3.add(result, sa, vec3.scale(result, n,t) );
 			return true;
@@ -11358,7 +11358,7 @@ global.geo = {
 		// Intersection lies outside segment
 		if(md+t*nd < 0.0)
 		{
-			// Intersection outside cylinder on ’p’ side
+			// Intersection outside cylinder on ï¿½pï¿½ side
 			if (nd <= 0.0) 
 				return false;
 			// Segment pointing away from endcap
@@ -11369,7 +11369,7 @@ global.geo = {
 			return k+2*t*(mn+t*nn) <= 0.0;
 		} else if (md+t*nd>dd)
 		{
-			// Intersection outside cylinder on ’q’ side
+			// Intersection outside cylinder on ï¿½qï¿½ side
 			if (nd >= 0.0) return false; //Segment pointing away from endcap
 			t = (dd - md) / nd;
 			// Keep intersection if Dot(S(t) - q, S(t) - q) <= r^2

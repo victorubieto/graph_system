@@ -1,13 +1,17 @@
 \basicVS 
-        
+
+#version 300 es
 precision highp float;
-attribute vec3 a_vertex;
-attribute vec3 a_normal;
-attribute vec4 a_color;
+
+in vec3 a_vertex;
+in vec3 a_normal;
+in vec4 a_color;
+
+out vec3 v_normal;
+out vec4 v_color;
+
 uniform mat4 u_mvp;
 uniform mat4 u_model;
-varying vec3 v_normal;
-varying vec4 v_color;
 void main() {
     v_normal = (u_model * vec4(a_normal,0.0)).xyz;
     gl_Position = u_mvp * vec4(a_vertex,1.0);
@@ -16,65 +20,86 @@ void main() {
 
 \basicFS
 
+#version 300 es
 precision highp float;
-varying vec3 v_normal;
+
+in vec3 v_normal;
+out vec4 FragColor;
 uniform vec4 u_camera_position;
 uniform vec4 u_color;
+
+in vec2 v_uv;
+uniform sampler2D u_texture;
+
 void main() {
     vec4 final_color = u_color;
-    gl_FragColor = vec4( final_color.xyz, 1.0 );
+    FragColor = vec4( final_color.xyz, 1.0 );
 }
 
 
 \volumeVS
 
+#version 300 es
 precision highp float;
-attribute vec3 a_vertex;
-attribute vec3 a_normal;
-attribute vec2 a_coord;
-varying vec3 v_pos;
-varying vec3 v_normal;
-varying vec2 v_uv;
-varying vec2 v_coord;
+
+in vec3 a_vertex;
+in vec3 a_normal;
+in vec2 a_coord;
+
+out vec3 v_pos;
+out vec3 v_world_pos;
+out vec3 v_normal;
+out vec2 v_coord;
+
+uniform mat4 u_model;
 uniform mat4 u_mvp;
         
 void main() {
-    v_pos = a_vertex.xyz;
+    v_pos = a_vertex;
+    v_world_pos = (u_model * vec4( v_pos, 1.0) ).xyz;
+
+    v_normal = (u_model * vec4( a_normal, 0.0) ).xyz; //a_normal
     v_coord = a_coord;
-    v_normal = a_normal;
-    gl_Position = u_mvp * vec4(v_pos,1.0);
+    //gl_Position = u_mvp * vec4(v_pos,1.0);
+    gl_Position = u_mvp * vec4( v_world_pos, 1.0 );
 }
 
 
 \FSUniforms
 
+#version 300 es
 precision highp float;
-varying vec3 v_pos;
-varying vec3 v_normal;
-varying vec2 v_uv;
+precision highp sampler3D;
+precision highp isampler3D;
+precision highp usampler3D;
+
+in vec3 v_pos;
+in vec3 v_normal;
+
+out vec4 final_color;
+
 uniform vec3 u_camera_position;
 uniform vec3 u_local_camera_position;
 uniform vec4 u_color;
 uniform float u_time;
 uniform float u_quality;
 uniform float u_brightness;
+uniform float u_obj_size;
+uniform sampler2D u_tf;
+uniform float u_jitter_factor;
 
-\FSVoxelFunc
-
-vec4 getVoxel()
-{
+float random(){
+	return fract(sin(dot(v_pos.xy, vec2(12.9898,78.233))) * 43758.5453123);
+}
 
 \FSMain
 
-    return vec4(0.0);
-}
-
 void main() {
-    vec4 final_color = vec4(0.0);
+    final_color = vec4(0.0);
 
 \FSReturn
 
-    gl_FragColor = final_color * u_brightness;
+    final_color = final_color * u_brightness;
 }
 
 
@@ -246,6 +271,10 @@ vec3 setRotation(vec3 vector, float x, float y, float z){
 
 \Noise
 
+uniform float scale;
+uniform float detail;
+uniform float distortion;
+
 float hash1( float n )
 {
     return fract( n*17.0*fract( n*0.3183099 ) );
@@ -318,3 +347,43 @@ float cnoise( vec3 P )
 
     return fractal_noise(P);
 }
+
+
+\Dicom
+
+uniform vec3 u_resolution;
+uniform float u_min_value;
+uniform float u_max_value;
+
+#if TEXTURE_TYPE == 0
+uniform sampler3D u_volume_texture;
+#elif TEXTURE_TYPE == 1
+uniform isampler3D u_volume_texture;
+#else
+uniform usampler3D u_volume_texture;
+#endif
+
+vec4 getVoxel(vec3 p)
+{
+    p = p*u_resolution + 0.5;
+    
+    // Better voxel interpolation from iquilezles.org/www/articles/texture/texture.htm
+    vec3 i = floor(p);
+    vec3 f = p - i;
+    f = f*f*f*(f*(f*6.0-15.0)+10.0);
+    p = i + f;
+    
+    p = (p - 0.5)/u_resolution;
+    vec4 v = vec4(texture( u_volume_texture, p ));
+
+    #if NORMALIZE_VOXEL_VALUE == 1
+    v = (v - vec4(u_min_value)) / (u_max_value - u_min_value);
+    #endif
+    
+    return v;
+}
+
+
+\TF
+
+uniform sampler2D u_tf;

@@ -1,5 +1,5 @@
 //  -- Víctor Ubieto --
-//  Basic graph shader editor using litegraph library and litegl to view the result in WebGL 1
+//  Main file that controls the application
 //
 
 var webgl_canvas = null;
@@ -13,7 +13,8 @@ const options = {
     quality: 100.0,
     color_bg: [0.5,0.5,0.5,1.0],
     color_mesh: [1.0,0.0,0.0,1.0],
-    brightness: 1.0
+    brightness: 1.0,
+    cut_value: 0.0 //only modified by dicoms
 }
 
 const time = {
@@ -99,11 +100,15 @@ function initWebGLView(container_id)
     var canvas = container_id.querySelector(".View");
     canvas.height = container_id.offsetHeight;
     canvas.width = container_id.offsetWidth;
-    gl = GL.create({canvas: canvas});
+    //gl = GL.create({canvas: canvas}); // future work in webgl1
+    gl = GL.create({canvas: canvas, version: 2}); //webgl2 for the 3d textures
+	if( gl.webgl_version != 2 || !gl ){
+	    alert("WebGL 2.0 not supported by your browser");
+	}
     gl.animate();
 }
 
-// This function inits the button functions
+// This function inits listeners (buttons, mouse, keys, ...)
 function initListeners(){
     // Buttons
     var optButton = document.getElementById("options");
@@ -113,6 +118,7 @@ function initListeners(){
     optButton.addEventListener("click", function(){
         w2popup.open({
             width: 300, height: 300,
+            url: 'readme.html',
             title: 'Visualization Options',
             body: `<div style="padding-left:30px;"> 
             <br /> <br />
@@ -121,16 +127,19 @@ function initListeners(){
                 var elem = document.getElementById('in_bgcolor');
                 var color = new jscolor.color(elem, {rgb: options.color_bg});
             </script>
+
             <br /> <br />
             <p>Mesh Color (if no rendering algorithm)</p> <input id="in_objcolor" class="color" onchange="updateOptions(this.id)">
             <script>    
                 var elem = document.getElementById('in_objcolor');
                 var color = new jscolor.color(elem, {rgb: options.color_mesh});
             </script>
+
             <br /> <br />
             <p>Quality</p> <input id="in_quality" class="w2ui-btn" onchange="updateOptions(this.id)" style="height:20px;"></input>
             <script> document.getElementById('in_quality').value = options.quality; </script>
             <br /> <br />
+
             <p>Brightness</p> <input id="in_brightness" class="w2ui-btn" onchange="updateOptions(this.id)" style="height:20px;"></input>
             <script> document.getElementById('in_brightness').value = options.brightness; </script>
             </div>`,
@@ -192,10 +201,23 @@ function initListeners(){
 
 function updateOptions(id)
 { 
-    if (id == "in_bgcolor") options.color_bg = hexToRgb(document.getElementById('in_bgcolor').value);
-    if (id == "in_objcolor") options.color_mesh = hexToRgb(document.getElementById('in_objcolor').value);
-    if (id == "in_quality") options.quality = document.getElementById('in_quality').value;
-    if (id == "in_brightness") options.brightness = document.getElementById('in_brightness').value;
+    switch (id) 
+    {
+        case "in_bgcolor":
+            var bgcolor = document.getElementById('in_bgcolor');
+            options.color_bg = hexToRgb(bgcolor.value);
+            break;
+        case "in_objcolor":
+            var objcolor = document.getElementById('in_objcolor');
+            options.color_mesh = hexToRgb(objcolor.value);
+            break;
+        case "in_quality":
+            options.quality = document.getElementById('in_quality').value;
+            break;
+        case "in_brightness":
+            options.brightness = document.getElementById('in_brightness').value;
+            break;
+    }
 }
 
 function hexToRgb(hex) {
@@ -237,49 +259,25 @@ function graphTemplate()
     node_color.pos = [100,100];
     graph.add(node_color);
 
-    var node_math = LiteGraph.createNode("Operator/Math");
-    node_math.pos = [150,200];
-    node_math.properties.OP = "*";
-    graph.add(node_math);
+    var node_dicom = LiteGraph.createNode("Texture/Dicom");
+    node_dicom.pos = [100, 250];
+    graph.add(node_dicom);
 
-    var node_noise = LiteGraph.createNode("Texture/Noise");
-    node_noise.pos = [50,330];
-    node_noise.setScale(2.0);
-    node_noise.setDetail(3.0);
-    graph.add(node_noise);
-    //reduce the quality if use noise due to the computational cost
-    if(node_noise.properties.detail > 1) options.quality -= 70; 
-
-    var node_rot = LiteGraph.createNode("Operator/Rotate");
-    node_rot.pos = [400,500];
-    node_rot.setZ(-90.0);
-    graph.add(node_rot);
-
-    var node_tra = LiteGraph.createNode("Operator/Translate");
-    node_tra.pos = [100,530];
-    node_tra.setY(1.0);
-    graph.add(node_tra);
-
-    var node_grad = LiteGraph.createNode("Texture/Gradient");
-    node_grad.pos = [350,350];
-    graph.add(node_grad);
+    var node_tf = LiteGraph.createNode("Operator/Transfer Function");
+    node_tf.pos = [200, 400];
+    graph.add(node_tf);
 
     var node_volume = LiteGraph.createNode("Shader/Volume");
     node_volume.pos = [350,150];
     graph.add(node_volume);
 
-    var node_out = LiteGraph.createNode("Output/Final");
+    var node_out = LiteGraph.createNode("Output/Material Output");
     node_out.pos = [600,200];
     graph.add(node_out);
 
     //Connections
-    node_color.connect(0, node_volume, 0);
-    node_math.connect(0, node_volume, 1);
-    node_noise.connect(1, node_math, 0);
-    node_tra.connect(0, node_rot, 0);
-    node_rot.connect(0, node_grad, 0);
-    node_grad.connect(1, node_math, 1);
-    node_volume.connect(0, node_out, 1);   
+
+    node_volume.connect(0, node_out, 0);   
 }
 
 function createScene()
@@ -354,9 +352,9 @@ function render()
 
     //generic gl flags and settings
     gl.disable(gl.DEPTH_TEST);
-    //gl.disable(gl.CULL_FACE);
+    gl.enable(gl.CULL_FACE);
     gl.cullFace(gl.BACK);
-
+    
     var inv_model = mat4.create();
     mat4.invert(inv_model, obj.model);
 
@@ -373,11 +371,12 @@ function render()
             u_camera_position: camera._position,
             u_local_camera_position: local_cam_pos,
             u_model: obj.model,
-            u_obj_size: obj.mesh.size/2.0,
+            u_obj_size: obj.mesh.size/2.0, //divided by 2 because it is centered in 0
             u_mvp: camera._viewprojection_matrix,
             u_color: options.color_mesh,
             u_quality: options.quality,
-            u_brightness: options.brightness
+            u_brightness: options.brightness,
+            //u_cut_value: options.cut_value,
         }).draw(obj.mesh);
     }
 }
@@ -389,7 +388,6 @@ function update(dt)
 
 function updateCamera(dt)
 {
-
     if (gl.mouse.left_button || gl.mouse.right_button) //orbit
     {
         if (mouse.drag_state)

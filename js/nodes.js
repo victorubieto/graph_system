@@ -1,6 +1,11 @@
 var Previous_VS = null;
 var Previous_FS = null;
 
+const macros = {
+    TEXTURE_TYPE: 1,
+    NORMALIZE_VOXEL_VALUE: 1,
+}
+
 addNewNodes = function()
 {
     // ------------------------------------------ Number Node ------------------------------------------ //
@@ -31,7 +36,7 @@ addNewNodes = function()
 
     NumberSelect.prototype.onExecute = function() 
     {
-        if (!isConnected(this, "Output"))
+        if (!isConnected(this, "Material Output"))
             return;
 
         this.setOutputData(0, this.properties.value);
@@ -92,7 +97,7 @@ addNewNodes = function()
 
     ColorSelect.prototype.onExecute = function() 
     {
-        if (!isConnected(this, "Output"))
+        if (!isConnected(this, "Material Output"))
             return;
 
         var color = this.properties.color;
@@ -118,7 +123,7 @@ addNewNodes = function()
 
     TexCoord.prototype.onExecute = function() 
     {
-        if (!isConnected(this, "Output"))
+        if (!isConnected(this, "Material Output"))
             return;
 
         this.setOutputData(0, "sample_pos"); // de -1 a 1
@@ -159,17 +164,39 @@ addNewNodes = function()
         this.widget.value = v;
     };
 
+    Gradient.prototype.toString = function(input)
+    {
+        if (input == null) {
+            return "null";
+        } else if (input.constructor === Number) {
+            return input.toFixed(1);
+        } else if (input.constructor === Array) {
+            var str = "";
+            for (var i = 0; i < (input.length - 1); ++i) {
+                if (input[i] % 1 != 0) //check if is decimal or not
+                    str += input[i].toFixed(1) + ",";
+                else
+                    str += input[i] + ".0,";
+            }
+            str += input[i] + ".0";
+            return str;
+        } else {
+            return String(input);
+        }
+    }
+
     Gradient.prototype.onExecute = function()
     {
-        if (!isConnected(this, "Output"))
+        if (!isConnected(this, "Material Output"))
             return;
 
         var vector = this.getInputData(0);
         if (vector === undefined)
             vector = "sample_pos";
 
+        //                                           PONER EN UNA FUNCION EN EL SHADER
         if (this.properties.type == "Linear")
-            var gradient_code = "clamp(" + vector + ".x, 0.0, 1.0)";
+            var gradient_code = "clamp((" + vector + ".x + " + this.toString(obj.mesh.size/2.0) + ")/" + this.toString(obj.mesh.size) + ", 0.0, 1.0)";
         else if (this.properties.type == "Quadratic")
             var gradient_code = "clamp(max(" + vector + ".x, 0.0) * max(" + vector + ".x, 0.0), 0.0, 1.0)";
         else if (this.properties.type == "Diagonal")
@@ -231,7 +258,7 @@ addNewNodes = function()
 
     Noise.prototype.onExecute = function()
     {
-        if (!isConnected(this, "Output"))
+        if (!isConnected(this, "Material Output"))
             return;
 
         shader.setUniform("scale", this.properties.scale);
@@ -260,42 +287,67 @@ addNewNodes = function()
     // ------------------------------------------ Dicom Node ------------------------------------------ //
     function Dicom()
     {
-        this.addInput("Vector", "vector");
-        this.addOutput("Color", "color");
-        this.addOutput("Alpha", "value");
+        this.addOutput("Dataset", "value");
 
         this.properties = {
-            volume: null,
+            _volume: null,
+            _texture: null,
+            state: "Empty"
         };
+        // this.widget = this.addWidget(
+        //     "slider",
+        //     "Cut_Value",
+        //     options.cut_value,
+        //     this.setValue.bind(this),
+        //     {min: 0.0, max: 10.0}
+        // );
+        // this.widget.disabled = true;
     }
 
     Dicom.title = "Dicom";
     Dicom.desc = "allows the user to load a dicom file";
 
+    // Dicom.prototype.setValue = function(v)
+    // {
+    //     options.cut_value = v;
+    //     this.widget.value = v;
+    // };
+
     Dicom.prototype.onAddPropertyToPanel = function(i, panel) 
     {
         var that = this;
 
-        var elem_input = document.createElement("input");
-        elem_input.id = "dicomInput" + this.id;
-        elem_input.style.display = "none";
-        elem_input.type = "file";
-        elem_input.multiple = true;
-        elem_input.webkitdirectory = true;
-        elem_input.addEventListener("change", function(event){
-            that.handleInput(event.target.files);
-        }, false);
-        
-        panel.content.appendChild(elem_input);
+        switch (i) {
+            case "_volume":
+                var elem_input = document.createElement("input");
+                elem_input.id = "dicomInput" + this.id;
+                elem_input.style.display = "none";
+                elem_input.type = "file";
+                elem_input.multiple = true;
+                elem_input.webkitdirectory = true;
+                elem_input.addEventListener("change", function(event){
+                    that.handleInput(event.target.files);
+                }, false);
+                panel.content.appendChild(elem_input);
 
-        var elem_button = document.createElement("button");
-        elem_button.class = "button";
-        elem_button.innerText = "Select Folder";
-        elem_button.addEventListener("click", function(){
-            document.getElementById(elem_input.id).click();
-        }, false);
-        
-        panel.content.appendChild(elem_button);
+                var elem_button = document.createElement("button");
+                elem_button.class = "button";
+                elem_button.innerText = "Select Folder";
+                elem_button.addEventListener("click", function(){
+                    document.getElementById(elem_input.id).click();
+                }, false);
+                panel.content.appendChild(elem_button);
+                break;
+
+            case "state":
+                var elem = document.createElement("span");
+                elem.id = "state";
+                elem.class = "text";
+                elem.innerText = this.properties.state;
+                elem.style.paddingLeft = "10px";
+                panel.content.appendChild(elem);
+                break;
+        }
 
         return true;
     };
@@ -309,21 +361,34 @@ addNewNodes = function()
 
     Dicom.prototype.onVolume = function(response)
     {
+        this.properties.state = "Loading...";
+        var elem = document.getElementById("state");
+        elem.innerText = this.properties.state;
+
         if(response.status == VolumeLoader.DONE){
             console.log("Volume loaded.");
-            this.properties.volume = response.volume;
-
-            var panel = document.querySelector("#node-panel");
-            var elem = document.createElement("span");
-            elem.class = "text";
-            elem.innerText = "Loaded!";
-            elem.style.paddingLeft = "10px";
-            panel.content.appendChild(elem);
+            this.properties._volume = response.volume;
+            this.color = "#803333"; //use color to remark the usefull output node
+            //this.widget.disabled = false;
             
-            // CREAR EL VOLUM COMPATIBLE EN WEBGL 1 (unsigned, ordre, ...) a partir del response.volume
+            this.properties.state = "Loaded!";
+            var elem = document.getElementById("state");
+            elem.innerText = this.properties.state;
 
-            // UPDATES (creare textures, etc...), canviar la funcio createTexture de VOLUME per que utilitzi texturas 2D
-            var texture = this.createTexture(); // create texture 2d
+            this.properties._volume.computeMinMax();
+            switch(this.properties._volume.voxelType){
+                case "UI":
+                    macros.TEXTURE_TYPE = 2;
+                    break;
+                case "I":
+                    macros.TEXTURE_TYPE = 1;
+                    break;
+                case "F":
+                    macros.TEXTURE_TYPE = 0;
+                    break;
+            }
+
+            this.properties._texture = response.volume.createTexture();
         }
         else if(response.status == VolumeLoader.ERROR){
             console.log("Error: ", response.explanation);
@@ -338,130 +403,32 @@ addNewNodes = function()
         }
     };
 
-    Dicom.prototype.createTexture = function(options){
-        options = options || {};
-        var volume = this.properties.volume;
-    
-        var width = parseInt(volume.width);
-        var height = parseInt(volume.height);
-        var depth = parseInt(volume.depth);
-        var channels = parseInt(volume.voxelChannels);
-        var data = volume._data;
-    
-        //Check dimensions and data
-        if(width < 1 || height < 1 || depth < 1){
-            console.warn("Volume dimensions must be positive");
-            return null;
-        }
-    
-        if(data == null){
-            console.warn("Creating texture without data");
-        }else if(data.length != width*height*depth*channels){
-            console.warn("Volume size does not match with data size");
-            return null;
-        }
-    
-        //Cannot be overrided from outside volume info
-        options.depth = depth;
-        options.pixel_data = data;
-        options.texture_type = gl.TEXTURE_2D;
-        
-        //Check https://www.khronos.org/registry/webgl/specs/latest/2.0/#3.7.6 texImage2D to see possible combinations for format, type and internalFormat
-        //For example for pre-computed gradients {format: gl.RGB, type: gl.UNSIGNED_BYTE, internalFormat: gl.RGB8}
-        var guessParams = this.guessTextureParams();
-    
-        options.format = options.format || guessParams.format;
-        options.type = options.type || guessParams.type;
-        options.internalFormat = options.internalFormat || guessParams.internalFormat;
-        options.minFilter = options.minFilter || gl.NEAREST;
-        options.magFilter = options.magFilter || gl.NEAREST;
-        options.wrap = options.wrap || gl.CLAMP_TO_EDGE;
-    
-        var max_tex_dim = gl.getParameter(gl.MAX_TEXTURE_SIZE);
-        if (width * depth > max_tex_dim)
-        {
-            var width_images = Math.floor(max_tex_dim / width);
-            var tex_width = width_images * width; //final width size of the 2d texture
-            var heigth_images = Math.ceil(depth / width_images)
-            var tex_height = heigth_images * height; //final height size of the 2d texture
-        }
-        else
-        {
-            var width_images = depth;
-            var tex_width = depth * width;
-            var heigth_images = 1.0;
-            var tex_height = height;
-        }
-
-       var texture = new GL.Texture(tex_width, tex_height, options);
-
-        //guardar la data a la textura 2d
-        for (var k = 0; k < heigth_images; k += height)
-            for (var j = 0; j < width_images; j += width)
-                for (var i = 0; i < height; i++)
-                    //texture.data[j, [k, i + width]] = volume._data.slice(i * width, i * width + width); //uploadData()???
-
-        return texture;
-    }
-
-    Dicom.prototype.guessTextureParams = function(){
-        var volume = this.properties.volume;
-        var bytes = volume.voxelBytes;
-        var channels = volume.voxelChannels;
-        var type = volume.voxelType;
-    
-        var guess = {
-            typeString: "",
-            formatString: "",
-            internalFormatString: "",
-            type: null,
-            format: null,
-            internalFormat: null
-        };
-    
-        guess.formatString = (channels == 1 ? "RED" : channels == 2 ? "RG" : channels == 3 ? "RGB" : "RGBA");
-        guess.internalFormatString = (channels == 1 ? "R" : channels == 2 ? "RG" : channels == 3 ? "RGB" : "RGBA") + (bytes == 1 ? "8" : bytes == 2 ? "16" : "32");
-    
-        switch(type){
-            case "UI":
-                guess.typeString = "UNSIGNED_";
-                guess.internalFormatString += "U";
-            case "I":
-                guess.typeString += (bytes == 1 ? "BYTE" : bytes == 2 ? "SHORT" : "INT");
-                guess.formatString += "_INTEGER";
-                guess.internalFormatString += "I";
-                break;
-            case "F":
-                guess.typeString = "FLOAT";	//1byte can't be float, 2 and 4 bytes can pass a FloatArray (there aren't HalfFloatArrays in JS)
-                break;
-            default:
-                guess.typeString = "UNSIGNED_BYTE";
-                break;
-        }
-    
-        guess.type = gl[guess.typeString];
-        guess.format = gl[guess.formatString];
-        guess.internalFormat = gl[guess.internalFormatString];
-    
-        return guess;
-    }
-
     Dicom.prototype.onExecute = function()
     {
-        if (!isConnected(this, "Output"))
+        if (!isConnected(this, "Material Output"))
             return;
 
-        if (this.properties.volume === null)
+        if (this.properties._volume === null)
             return;
 
-        var vec = this.getInputData(0);
-        if(vec === undefined)
-            vec = "v_uv";
+        obj.model[0] = this.properties._volume.width*this.properties._volume.widthSpacing;
+        obj.model[5] = this.properties._volume.height*this.properties._volume.heightSpacing;
+        obj.model[10] = this.properties._volume.depth*this.properties._volume.depthSpacing;
 
-        var CODIGO = "getVoxel(" + vec + ")";
+        var aux = Math.max(obj.model[0], obj.model[5], obj.model[10]);
 
-        this.setOutputData(0, "texture2D( u_texture, " + vec + " )"); //cuidado si en algun momento necesito mas de una imagen
-        this.setOutputData(1, "texture2D( u_texture, " + vec + " ).a");
+        obj.model[0] /= aux;
+        obj.model[5] /= aux;
+        obj.model[10] /= aux;
+
+        var dicom_code = "getVoxel((sample_pos + vec3(1.0))/2.0).x";
+
+        shader.setUniform("u_volume_texture", this.properties._texture.bind(0));
+        shader.setUniform("u_resolution", [this.properties._texture.width, this.properties._texture.height, this.properties._texture.depth]);
+        shader.setUniform("u_min_value", this.properties._volume._min);
+        shader.setUniform("u_max_value", this.properties._volume._max);
+
+        this.setOutputData(0, dicom_code);
     }
 
     LiteGraph.registerNodeType("Texture/Dicom", Dicom);
@@ -527,7 +494,7 @@ addNewNodes = function()
 
     MathOperation.prototype.onExecute = function() 
     {
-        if (!isConnected(this, "Output"))
+        if (!isConnected(this, "Material Output"))
             return;
 
         var A = this.getInputData(0);
@@ -645,7 +612,7 @@ addNewNodes = function()
 
     MixColor.prototype.onExecute = function()
     {
-        if (!isConnected(this, "Output"))
+        if (!isConnected(this, "Material Output"))
             return;
 
         var fac = this.getInputData(0);
@@ -747,7 +714,7 @@ addNewNodes = function()
 
     ColorRamp.prototype.onExecute = function()
     {
-        if (!isConnected(this, "Output"))
+        if (!isConnected(this, "Material Output"))
             return;
 
         var input = this.getInputData(0);
@@ -842,7 +809,7 @@ addNewNodes = function()
 
     Translate.prototype.onExecute = function()
     {
-        if (!isConnected(this, "Output"))
+        if (!isConnected(this, "Material Output"))
             return;
 
         var vector = this.getInputData(0);
@@ -939,7 +906,7 @@ addNewNodes = function()
 
     Scale.prototype.onExecute = function()
     {
-        if (!isConnected(this, "Output"))
+        if (!isConnected(this, "Material Output"))
             return;
 
         var vector = this.getInputData(0);
@@ -1036,7 +1003,7 @@ addNewNodes = function()
 
     Rotate.prototype.onExecute = function()
     {
-        if (!isConnected(this, "Output"))
+        if (!isConnected(this, "Material Output"))
             return;
 
         var vector = this.getInputData(0);
@@ -1056,52 +1023,212 @@ addNewNodes = function()
 
 
     // ------------------------------------------ TransferFunc Node ------------------------------------------ //
-    function TransferFunc()
-    {
-        this.addInput("Fac", "value");
+    function TransferFunc() {
         this.addOutput("Color", "color");
-        this.addOutput("Fac", "value");
-    }
+        var lowtex = 3; //create new texture with low precision (byte)
+		this.properties = { precision: lowtex, split_channels: false };
+		this._values = new Uint8Array(256*4);
+		this._values.fill(255);
+		this._curve_texture = null;
+		this._must_update = true;
+		this._points = {
+			RGBA: [[0,0],[1,1]],
+			R: [[0,0],[1,1]],
+			G: [[0,0],[1,1]],
+            B: [[0,0],[1,1]],
+            A: [[0,0],[1,1]]
+		};
+		this.curve_editor = null;
+		this.addWidget("toggle","Split Channels",false,"split_channels");
+		this.addWidget("combo","Channel","RGBA",{ values:["RGBA","R","G","B","A"]});
+		this.curve_offset = 68;
+		this.size = [ 240, 170 ];
+	}
 
-    TransferFunc.title = "TransferFunc";
-    TransferFunc.desc = "";
+    TransferFunc.title = "Transfer Function";
+    TransferFunc.desc = "control the RGBA for each density value";
 
-    TransferFunc.prototype.onExecute = function()
-    {
-        if (!isConnected(this, "Output"))
-            return;
+	TransferFunc.prototype.onExecute = function() {
+        
+		if (!isConnected(this, "Material Output"))
+        return;
 
-        var vector = this.getInputData(0);
-        if(vector === undefined)
-            vector = "sample_pos";
+		//if(this._must_update || !this._curve_texture )
+            this.updateCurve();
+        this._must_update = false;
 
-        if (vector == "v_uv")
-            var gradientRGB_code = `` + vector + `.xy, 1.0, 1.0`;
-        else var gradientRGB_code = `` + vector + `.xyz, 1.0`;
-        var gradient_code = `` + vector + `.x`;
+		var curve_texture = this._curve_texture;
 
-        this.setOutputData(0, gradientRGB_code);
-        this.setOutputData(1, gradient_code);
-    }
+        shader.setUniform("u_tf", curve_texture.bind(1)); 
 
-    LiteGraph.registerNodeType("Operator/TransferFunc", TransferFunc);
+        var color_tf = "texture(u_tf, vec2(clamp(v, 0.0, 1.0),1.0))";
+
+        this.setOutputData(0, color_tf);
+	};
+
+	TransferFunc.prototype.sampleCurve = function(f,points)
+	{
+		var points = points || this._points.RGBA;
+		if(!points)
+			return;
+		for(var i = 0; i < points.length - 1; ++i)
+		{
+			var p = points[i];
+			var pn = points[i+1];
+			if(pn[0] < f)
+				continue;
+			var r = (pn[0] - p[0]);
+			if( Math.abs(r) < 0.00001 )
+				return p[1];
+			var local_f = (f - p[0]) / r;
+			return p[1] * (1.0 - local_f) + pn[1] * local_f;
+		}
+		return 0;
+	}
+
+	TransferFunc.prototype.updateCurve = function()
+	{
+		var values = this._values;
+		var num = values.length / 4;
+		var split = this.properties.split_channels;
+		for(var i = 0; i < num; ++i)
+		{
+			if(split)
+			{
+				values[i*4] = Math.clamp( this.sampleCurve(i/num,this._points.R)*255,0,255);
+				values[i*4+1] = Math.clamp( this.sampleCurve(i/num,this._points.G)*255,0,255);
+                values[i*4+2] = Math.clamp( this.sampleCurve(i/num,this._points.B)*255,0,255);
+                values[i*4+3] = Math.clamp( this.sampleCurve(i/num,this._points.A)*255,0,255);
+			}
+			else
+			{
+				var v = this.sampleCurve(i/num);//sample curve
+				values[i*4] = values[i*4+1] = values[i*4+2] = values[i*4+3] = Math.clamp(v*255,0,255);
+			}
+		}
+		if(!this._curve_texture)
+			this._curve_texture = new GL.Texture(256,1,{ format: gl.RGBA, magFilter: gl.LINEAR, wrap: gl.CLAMP_TO_EDGE });
+		this._curve_texture.uploadData(values,null,true);
+	}
+
+	TransferFunc.prototype.onSerialize = function(o)
+	{
+		var curves = {};
+		for(var i in this._points)
+			curves[i] = this._points[i].concat();
+		o.curves = curves;
+	}
+
+	TransferFunc.prototype.onConfigure = function(o)
+	{
+		this._points = o.curves;
+		if(this.curve_editor)
+			curve_editor.points = this._points;
+		this._must_update = true;
+	}
+
+	TransferFunc.prototype.onMouseDown = function(e, localpos, graphcanvas)
+	{
+		if(this.curve_editor)
+		{
+            var r = this.curve_editor.onMouseDown([localpos[0],localpos[1]-this.curve_offset], graphcanvas);
+			if(r)
+				this.captureInput(true);
+			return r;
+        }
+	}
+
+	TransferFunc.prototype.onMouseMove = function(e, localpos, graphcanvas)
+	{
+		if(this.curve_editor)
+            return this.curve_editor.onMouseMove([localpos[0],localpos[1]-this.curve_offset], graphcanvas);
+	}
+
+	TransferFunc.prototype.onMouseUp = function(e, localpos, graphcanvas)
+	{
+		if(this.curve_editor)
+			return this.curve_editor.onMouseUp([localpos[0],localpos[1]-this.curve_offset], graphcanvas);
+		this.captureInput(false);
+	}
+
+	TransferFunc.channel_line_colors = { "RGBA":"#666","R":"#F33","G":"#3F3","B":"#33F","A":"#FF0" };
+
+	TransferFunc.prototype.onDrawBackground = function(ctx, graphcanvas)
+	{
+		if(this.flags.collapsed)
+			return;
+
+		if(!this.curve_editor)
+			this.curve_editor = new LiteGraph.CurveEditor(this._points.R);
+		ctx.save();
+		ctx.translate(0,this.curve_offset);
+		var channel = this.widgets[1].value;
+
+		if(this.properties.split_channels)
+		{
+			if(channel == "RGBA")
+			{
+				this.widgets[1].value = channel = "R";
+				this.widgets[1].disabled = false;
+			}
+			this.curve_editor.points = this._points.R;
+			this.curve_editor.draw( ctx, [this.size[0],this.size[1] - this.curve_offset], graphcanvas, "#111", TransferFunc.channel_line_colors.R, true );
+			ctx.globalCompositeOperation = "lighten";
+			this.curve_editor.points = this._points.G;
+			this.curve_editor.draw( ctx, [this.size[0],this.size[1] - this.curve_offset], graphcanvas, null, TransferFunc.channel_line_colors.G, true );
+			this.curve_editor.points = this._points.B;
+			this.curve_editor.draw( ctx, [this.size[0],this.size[1] - this.curve_offset], graphcanvas, null, TransferFunc.channel_line_colors.B, true );
+            this.curve_editor.points = this._points.A;
+			this.curve_editor.draw( ctx, [this.size[0],this.size[1] - this.curve_offset], graphcanvas, null, TransferFunc.channel_line_colors.A, true );
+            ctx.globalCompositeOperation = "source-over";
+		}
+		else
+		{
+			this.widgets[1].value = channel = "RGBA";
+			this.widgets[1].disabled = true;
+		}
+
+		this.curve_editor.points = this._points[channel];
+		this.curve_editor.draw( ctx, [this.size[0],this.size[1] - this.curve_offset], graphcanvas, this.properties.split_channels ? null : "#111", TransferFunc.channel_line_colors[channel]  );
+		ctx.restore();
+	}
+
+	TransferFunc.pixel_shader =
+		"precision highp float;\n\
+		varying vec2 v_coord;\n\
+		uniform sampler2D u_texture;\n\
+		uniform sampler2D u_curve;\n\
+		uniform float u_range;\n\
+		\n\
+		void main() {\n\
+			vec4 color = texture2D( u_texture, v_coord ) * u_range;\n\
+			color.x = texture2D( u_curve, vec2( color.x, 0.5 ) ).x;\n\
+			color.y = texture2D( u_curve, vec2( color.y, 0.5 ) ).y;\n\
+			color.z = texture2D( u_curve, vec2( color.z, 0.5 ) ).z;\n\
+			//color.w = texture2D( u_curve, vec2( color.w, 0.5 ) ).w;\n\
+			gl_FragColor = color;\n\
+		}";
+
+	LiteGraph.registerNodeType("Operator/Transfer Function", TransferFunc);
 
 
     // ------------------------------------------ Volume Node ------------------------------------------ //
     function Volume()
     {
         this.addInput("Color", "color");
-
         this.addInput("Density", "value");
+        this.addOutput("Volume", "Fcolor");
+
+        this.properties = {
+            density: 1.0,
+        }
         this.widget = this.addWidget(
             "number",
             "Density",
-            1.0,
+            this.properties.density,
             this.setValue.bind(this),
             {min: 0, max: 10}
-        );
-
-        this.addOutput("Volume", "volume");
+        )
     }
 
     Volume.title = "Volume";
@@ -1109,6 +1236,7 @@ addNewNodes = function()
 
     Volume.prototype.setValue = function(v) 
     {
+        this.properties.density = v;
         this.widget.value = v;
     };
 
@@ -1135,23 +1263,26 @@ addNewNodes = function()
 
     Volume.prototype.onExecute = function()
     {
-        if (!isConnected(this, "Output"))
+        if (!isConnected(this, "Material Output"))
             return;
 
         var color = this.getInputData(0);
         if(color === undefined)
-            color = "0.5,0.5,0.5,1.0";
+            color = `0.5,0.5,0.5,1.0`;
         else color = this.toString(color);
-
+  
+        var tf = "";
         var density = this.getInputData(1);
         if(density === undefined) {
             this.widget.disabled = false;
             density = this.toString(this.widget.value);
         }
         else {
-            this.widget.disabled = true;
+            this.widget.disabled = true; 
             density = this.toString(density);
         }
+
+        shader.setUniform("u_jitter_factor", 0.1); 
         
         var volume_code = `
     vec3 ray_origin = v_pos;
@@ -1160,18 +1291,21 @@ addNewNodes = function()
     vec3 ray_step = ray_direction / u_quality;
     float d = length(ray_step);
     vec4 sample_color;
+    // only use jitter with loaded datasets
+    sample_pos = sample_pos - (ray_step * random() * u_jitter_factor);
 
     for(int i=0; i<100000; i++){     
 
-        float v = ` + density + `; // Density
-
-        sample_color = v * vec4(` + color + `);
+        float v = ` + density + `;
+        
+        sample_color = vec4(` + color + `);
+        sample_color = vec4(sample_color.xyz, v * sample_color.w);
         //transparency, applied this way to avoid color bleeding
-        sample_color = vec4(sample_color.xyz * sample_color.w, sample_color.w); 
-           
+        sample_color.xyz = sample_color.xyz * sample_color.w; 
+               
         final_color = d * sample_color * (1.0 - final_color.w) + final_color; //compositing with previous value
         if(final_color.w >= 1.0) break;
-
+        
         sample_pos = sample_pos + ray_step;
 
         vec3 abss = abs(sample_pos);
@@ -1186,31 +1320,30 @@ addNewNodes = function()
 
 
     // ------------------------------------------ Output Node ------------------------------------------ //
-    function Final()
+    function MatOutput()
     {
-        this.addInput("Surface", "surface");
-        this.addInput("Volume", "volume");
-        this.addInput("Displacement", "displacenent");
+        this.addInput("Frag Color", "Fcolor");
     }
 
-    Final.title = "Output";
-    Final.desc = "material output, assmebles the final shader";
+    MatOutput.title = "Material Output";
+    MatOutput.desc = "material output, assmebles the final shader";
 
-    Final.prototype.onExecute = function()
+    MatOutput.prototype.onExecute = function()
     {
         // Chech that is not repeated
         for (var i = 1; i < this.id; i++)
         {
             if (this.graph._nodes_by_id[i] === undefined)
                 continue;
-            if (this.graph._nodes_by_id[i].title == "Output")
+            if (this.graph._nodes_by_id[i].title == "Material Output")
                 return;
         }
         this.color = "#233"; //use color to remark the usefull output node
+        this.strokeStyle = "black";
 
         // Check if it has inputs linked
         var inputs = this.inputs;
-        if (inputs[0].link == null && inputs[1].link == null && inputs[2].link == null)
+        if (inputs[0].link == null) // && inputs[1].link == null && inputs[2].link == null)
         {
             if (parsedFile.length != 0)
             {
@@ -1230,27 +1363,18 @@ addNewNodes = function()
         }
         
         gl.enable(gl.BLEND);
-        gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+        //gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
-        var surface = this.getInputData(0);
-        if(surface === undefined)
-            surface = ``;
-
-        var volume = this.getInputData(1);
-        var volume_uniforms = ``;
+        var volume = this.getInputData(0);
+        var volume_uniforms = "";
         if(volume === undefined)
-            volume = ``;
+            volume = "";
         else {
-            volume_uniforms = `
-uniform float u_obj_size;
-uniform float u_cutvalue;
-uniform float scale;
-uniform float detail;
-uniform float distortion;
-`;
+            volume_uniforms = "";
 
             if (hasConnection(this, "Rotate"))
-                volume_uniforms += parsedFile["Rotate"];
+                volume_uniforms += "\n" + parsedFile["Rotate"];
             if (hasConnection(this, "Translate"))
                 volume_uniforms += parsedFile["Translate"];
             if (hasConnection(this, "Scale"))
@@ -1259,11 +1383,12 @@ uniform float distortion;
                 volume_uniforms += parsedFile["Noise"];
             if (hasConnection(this, "ColorRamp"))
                 volume_uniforms += parsedFile["ColorRamp"];
-        }	
-
-        var displacement = this.getInputData(2);
-        if(displacement === undefined)
-            displacement = ``;
+            if (hasConnection(this, "Dicom"))
+                volume_uniforms += parsedFile["Dicom"];
+            else { // Need to move this part
+                 obj.model[0] = 1.0; obj.model[5] = 1.0; obj.model[10] = 1.0;
+            }
+        }
 
         if (parsedFile.length != 0)
         {
@@ -1271,20 +1396,20 @@ uniform float distortion;
             //VS
             var Node_VS_code = parsedFile["volumeVS"];
             //FS
-            var Node_FS_code = parsedFile["FSUniforms"] + volume_uniforms + parsedFile["FSVoxelFunc"] +
+            var Node_FS_code = parsedFile["FSUniforms"] + volume_uniforms + "\n" +
                 parsedFile["FSMain"] + volume + parsedFile["FSReturn"];
 
             if (Previous_VS !== Node_VS_code || Previous_FS !== Node_FS_code)
             {
                 //Load the new shader
-                shader = new Shader( Node_VS_code, Node_FS_code );
+                shader = new Shader( Node_VS_code, Node_FS_code, macros );
                 Previous_VS = Node_VS_code;
                 Previous_FS = Node_FS_code;
             }
         }
     }
 
-    LiteGraph.registerNodeType("Output/Final", Final);
+    LiteGraph.registerNodeType("Output/Material Output", MatOutput);
 }
 
 // ------------------------------------------ Usefull Functions ------------------------------------------ //
