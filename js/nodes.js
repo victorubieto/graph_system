@@ -1,5 +1,13 @@
+
+/** --- Víctor Ubieto 2020 ---
+ *  This file adds all the nodes implemented for the graph editor
+**/
+
 var Previous_VS = null;
 var Previous_FS = null;
+
+var nodes_code = "";
+var nodes_uniforms = "";
 
 const macros = {
     TEXTURE_TYPE: 1,
@@ -126,11 +134,11 @@ addNewNodes = function()
         if (!isConnected(this, "Material Output"))
             return;
 
-        this.setOutputData(0, "sample_pos"); // de -1 a 1
-        this.setOutputData(1, "v_normal"); // de -1 a 1
-        this.setOutputData(2, "vec3(v_uv, 1.0)"); // de 0 a 1
-        this.setOutputData(3, "v_pos"); // de -1 a 1
-        this.setOutputData(4, "u_camera_position"); // uniform del shader
+        this.setOutputData(0, "sample_pos"); // from -obj_size/2 to obj_size/2
+        this.setOutputData(1, "v_normal"); // from -1 to 1
+        this.setOutputData(2, "vec3(v_coord, 1.0)"); // from 0 to 1
+        this.setOutputData(3, "v_pos"); // from -1 to 1 (because is in local)
+        this.setOutputData(4, "u_camera_position"); // 
     };
 
     LiteGraph.registerNodeType("Input/TexCoord", TexCoord);
@@ -194,9 +202,8 @@ addNewNodes = function()
         if (vector === undefined)
             vector = "sample_pos";
 
-        //                                           PONER EN UNA FUNCION EN EL SHADER
         if (this.properties.type == "Linear")
-            var gradient_code = "clamp((" + vector + ".x + " + this.toString(obj.mesh.size/2.0) + ")/" + this.toString(obj.mesh.size) + ", 0.0, 1.0)";
+            var gradient_code = "clamp((" + vector + ".x + " + this.toString(entity._mesh.size/2.0) + ")/" + this.toString(entity._mesh.size) + ", 0.0, 1.0)";
         else if (this.properties.type == "Quadratic")
             var gradient_code = "clamp(max(" + vector + ".x, 0.0) * max(" + vector + ".x, 0.0), 0.0, 1.0)";
         else if (this.properties.type == "Diagonal")
@@ -261,6 +268,9 @@ addNewNodes = function()
         if (!isConnected(this, "Material Output"))
             return;
 
+        nodes_uniforms += Noise.uniforms;
+        nodes_code += Noise.pixel_shader;
+
         shader.setUniform("scale", this.properties.scale);
         shader.setUniform("detail", this.properties.detail);
         shader.setUniform("distortion", 0.0); // en mi pc si uso esto me va a 1 fps como mucho
@@ -274,12 +284,83 @@ addNewNodes = function()
         var noise_code = "cnoise(" + vector + ")";
         var noiseRGB_code = "vec4(vec3(" + noise_code + "), 1.0)";
 
-        // noise en 2D
-        //return vec4(fract(sin(dot(local_pos.xy, vec2(12.9898,78.233)))* 43758.5453123));
-
         this.setOutputData(0, noiseRGB_code);
         this.setOutputData(1, noise_code);
     }
+
+    Noise.uniforms = `
+uniform float scale;
+uniform float detail;
+uniform float distortion;`;
+
+    Noise.pixel_shader = `
+
+// Noise functions
+float hash1( float n )
+{
+    return fract( n*17.0*fract( n*0.3183099 ) );
+}
+
+float noise( vec3 x )
+{
+    vec3 p = floor(x);
+    vec3 w = fract(x);
+    
+    vec3 u = w*w*w*(w*(w*6.0-15.0)+10.0);
+    
+    float n = p.x + 317.0*p.y + 157.0*p.z;
+    
+    float a = hash1(n+0.0);
+    float b = hash1(n+1.0);
+    float c = hash1(n+317.0);
+    float d = hash1(n+318.0);
+    float e = hash1(n+157.0);
+    float f = hash1(n+158.0);
+    float g = hash1(n+474.0);
+    float h = hash1(n+475.0);
+
+    float k0 =   a;
+    float k1 =   b - a;
+    float k2 =   c - a;
+    float k3 =   e - a;
+    float k4 =   a - b - c + d;
+    float k5 =   a - c - e + g;
+    float k6 =   a - b - e + f;
+    float k7 = - a + b + c - d + e - f - g + h;
+
+    return -1.0+2.0*(k0 + k1*u.x + k2*u.y + k3*u.z + k4*u.x*u.y + k5*u.y*u.z + k6*u.z*u.x + k7*u.x*u.y*u.z);
+}
+
+#define MAX_OCTAVES 16
+
+float fractal_noise(vec3 P)
+{
+    float fscale = 1.0;
+    float amp = 1.0;
+    float sum = 0.0;
+    float octaves = clamp(detail, 0.0, 16.0);
+    int n = int(octaves);
+
+    for (int i = 0; i <= MAX_OCTAVES; i++) {
+        if (i > n) continue;
+        float t = noise(fscale * P);
+        sum += t * amp;
+        amp *= 0.5;
+        fscale *= 2.0;
+    }
+
+    return sum;
+}
+
+float cnoise( vec3 P )
+{
+    P *= scale;
+
+    if (u_time != 0.0) //controlled with a flag
+        P += u_time;
+
+    return fractal_noise(P);
+}`;
 
     LiteGraph.registerNodeType("Texture/Noise", Noise);
 
@@ -294,24 +375,10 @@ addNewNodes = function()
             _texture: null,
             state: "Empty"
         };
-        // this.widget = this.addWidget(
-        //     "slider",
-        //     "Cut_Value",
-        //     options.cut_value,
-        //     this.setValue.bind(this),
-        //     {min: 0.0, max: 10.0}
-        // );
-        // this.widget.disabled = true;
     }
 
     Dicom.title = "Dicom";
     Dicom.desc = "allows the user to load a dicom file";
-
-    // Dicom.prototype.setValue = function(v)
-    // {
-    //     options.cut_value = v;
-    //     this.widget.value = v;
-    // };
 
     Dicom.prototype.onAddPropertyToPanel = function(i, panel) 
     {
@@ -369,7 +436,6 @@ addNewNodes = function()
             console.log("Volume loaded.");
             this.properties._volume = response.volume;
             this.color = "#803333"; //use color to remark the usefull output node
-            //this.widget.disabled = false;
             
             this.properties.state = "Loaded!";
             var elem = document.getElementById("state");
@@ -411,15 +477,18 @@ addNewNodes = function()
         if (this.properties._volume === null)
             return;
 
-        obj.model[0] = this.properties._volume.width*this.properties._volume.widthSpacing;
-        obj.model[5] = this.properties._volume.height*this.properties._volume.heightSpacing;
-        obj.model[10] = this.properties._volume.depth*this.properties._volume.depthSpacing;
+        nodes_uniforms += Dicom.uniforms;
+        nodes_code += Dicom.pixel_shader;
 
-        var aux = Math.max(obj.model[0], obj.model[5], obj.model[10]);
+        entity._model_matrix[0] = this.properties._volume.width*this.properties._volume.widthSpacing;
+        entity._model_matrix[5] = this.properties._volume.height*this.properties._volume.heightSpacing;
+        entity._model_matrix[10] = this.properties._volume.depth*this.properties._volume.depthSpacing;
 
-        obj.model[0] /= aux;
-        obj.model[5] /= aux;
-        obj.model[10] /= aux;
+        var aux = Math.max(entity._model_matrix[0], entity._model_matrix[5], entity._model_matrix[10]);
+
+        entity._model_matrix[0] /= aux;
+        entity._model_matrix[5] /= aux;
+        entity._model_matrix[10] /= aux;
 
         var dicom_code = "getVoxel((sample_pos + vec3(1.0))/2.0).x";
 
@@ -430,6 +499,44 @@ addNewNodes = function()
 
         this.setOutputData(0, dicom_code);
     }
+
+    Dicom.uniforms = `
+uniform vec3 u_resolution;
+uniform float u_min_value;
+uniform float u_max_value;
+    
+#if TEXTURE_TYPE == 0
+uniform sampler3D u_volume_texture;
+#elif TEXTURE_TYPE == 1
+uniform isampler3D u_volume_texture;
+#else
+uniform usampler3D u_volume_texture;
+#endif
+`;
+
+    Dicom.pixel_shader = `
+
+// Dicom function
+vec4 getVoxel(vec3 p)
+{
+    p = p*u_resolution + 0.5;
+    
+    // Better voxel interpolation from iquilezles.org/www/articles/texture/texture.htm
+    vec3 i = floor(p);
+    vec3 f = p - i;
+    f = f*f*f*(f*(f*6.0-15.0)+10.0);
+    p = i + f;
+    
+    p = (p - 0.5)/u_resolution;
+    vec4 v = vec4(texture( u_volume_texture, p ));
+
+    #if NORMALIZE_VOXEL_VALUE == 1
+    v = (v - vec4(u_min_value)) / (u_max_value - u_min_value);
+    #endif
+    
+    return v;
+}
+`;
 
     LiteGraph.registerNodeType("Texture/Dicom", Dicom);
 
@@ -717,6 +824,8 @@ addNewNodes = function()
         if (!isConnected(this, "Material Output"))
             return;
 
+        nodes_code += ColorRamp.pixel_shader;
+
         var input = this.getInputData(0);
         if(input === undefined)
             input = "0.0";
@@ -727,6 +836,21 @@ addNewNodes = function()
         this.setOutputData(0, rampRGB_code);
         this.setOutputData(1, ramp_code);
     }
+
+    ColorRamp.pixel_shader = `
+
+// ColorRamp function    
+vec4 colorRamp(float fac, float clamp_min, float clamp_max){
+    float value;
+    if ( fac < 0.5 ){
+        value = clamp(fac, 0.0, clamp_min);
+    }
+    else{
+        value =  clamp(fac, clamp_max, 1.0);
+    }
+    return vec4(vec3(value), 1.0);
+}
+`;
 
     LiteGraph.registerNodeType("Operator/ColorRamp", ColorRamp);
 
@@ -812,6 +936,8 @@ addNewNodes = function()
         if (!isConnected(this, "Material Output"))
             return;
 
+        nodes_code += Translate.pixel_shader;
+
         var vector = this.getInputData(0);
         if(vector === undefined)
             vector = "sample_pos";
@@ -824,6 +950,14 @@ addNewNodes = function()
 
         this.setOutputData(0, translation_code);
     }
+
+    Translate.pixel_shader = `
+
+// Translate function
+vec3 setTranslation(vec3 vector, float x, float y, float z){
+    return vector + vec3(x, y, z);
+}
+`;
 
     LiteGraph.registerNodeType("Operator/Translate", Translate);
 
@@ -909,6 +1043,8 @@ addNewNodes = function()
         if (!isConnected(this, "Material Output"))
             return;
 
+        nodes_code += Scale.pixel_shader;
+
         var vector = this.getInputData(0);
         if(vector === undefined)
             vector = "sample_pos";
@@ -921,6 +1057,14 @@ addNewNodes = function()
 
         this.setOutputData(0, scale_code);
     }
+
+    Scale.pixel_shader = `
+
+// Scale function
+vec3 setScale(vec3 vector, float x, float y, float z){
+    return vector * vec3(x, y, z);
+}    
+`;
 
     LiteGraph.registerNodeType("Operator/Scale", Scale);
 
@@ -1006,6 +1150,8 @@ addNewNodes = function()
         if (!isConnected(this, "Material Output"))
             return;
 
+        nodes_code += Rotate.pixel_shader;
+
         var vector = this.getInputData(0);
         if(vector === undefined)
             vector = "sample_pos";
@@ -1018,6 +1164,34 @@ addNewNodes = function()
 
         this.setOutputData(0, rotate_code);
     }
+
+    Rotate.pixel_shader = `
+
+// Rotate functions
+#define M_PI 3.1415926535897932384626433832795        
+
+vec3 setRotation(vec3 vector, float x, float y, float z){
+    vec3 rad = vec3(x, y, z) * (M_PI / 180.0);
+
+    //around X
+    vec3 result1;
+    result1.x = vector.x;
+    result1.y = vector.y * cos(rad.x) - vector.z * sin(rad.x);
+    result1.z = vector.y * sin(rad.x) + vector.z * cos(rad.x);
+    //around Y
+    vec3 result2;
+    result2.x = result1.x * cos(rad.y) + result1.z * sin(rad.y);
+    result2.y = result1.y;
+    result2.z = result1.z * cos(rad.y) - result1.x * sin(rad.y);
+    //around Z
+    vec3 result3;
+    result3.x = result2.x * cos(rad.z) - result2.y * sin(rad.z);
+    result3.y = result2.x * sin(rad.z) + result2.y * cos(rad.z);
+    result3.z = result2.z;
+    
+    return result3;
+}
+`;
 
     LiteGraph.registerNodeType("Operator/Rotate", Rotate);
 
@@ -1052,6 +1226,8 @@ addNewNodes = function()
         
 		if (!isConnected(this, "Material Output"))
         return;
+
+        nodes_uniforms += TransferFunc.uniforms;
 
 		//if(this._must_update || !this._curve_texture )
             this.updateCurve();
@@ -1193,21 +1369,8 @@ addNewNodes = function()
 		ctx.restore();
 	}
 
-	TransferFunc.pixel_shader =
-		"precision highp float;\n\
-		varying vec2 v_coord;\n\
-		uniform sampler2D u_texture;\n\
-		uniform sampler2D u_curve;\n\
-		uniform float u_range;\n\
-		\n\
-		void main() {\n\
-			vec4 color = texture2D( u_texture, v_coord ) * u_range;\n\
-			color.x = texture2D( u_curve, vec2( color.x, 0.5 ) ).x;\n\
-			color.y = texture2D( u_curve, vec2( color.y, 0.5 ) ).y;\n\
-			color.z = texture2D( u_curve, vec2( color.z, 0.5 ) ).z;\n\
-			//color.w = texture2D( u_curve, vec2( color.w, 0.5 ) ).w;\n\
-			gl_FragColor = color;\n\
-		}";
+    TransferFunc.uniforms = `
+uniform sampler2D u_tf;`;
 
 	LiteGraph.registerNodeType("Operator/Transfer Function", TransferFunc);
 
@@ -1266,12 +1429,14 @@ addNewNodes = function()
         if (!isConnected(this, "Material Output"))
             return;
 
+        nodes_uniforms += Volume.uniforms;
+        nodes_code += Volume.pixel_shader;
+
         var color = this.getInputData(0);
         if(color === undefined)
             color = `0.5,0.5,0.5,1.0`;
         else color = this.toString(color);
   
-        var tf = "";
         var density = this.getInputData(1);
         if(density === undefined) {
             this.widget.disabled = false;
@@ -1314,7 +1479,17 @@ addNewNodes = function()
     `;
 
         this.setOutputData(0, volume_code);
-    }
+    }  
+  
+    Volume.uniforms = `
+uniform float u_jitter_factor;`;
+
+    Volume.pixel_shader = `
+
+float random(){
+    return fract(sin(dot(v_pos.xy, vec2(12.9898,78.233))) * 43758.5453123);
+}
+`;
 
     LiteGraph.registerNodeType("Shader/Volume", Volume);
 
@@ -1343,13 +1518,13 @@ addNewNodes = function()
 
         // Check if it has inputs linked
         var inputs = this.inputs;
-        if (inputs[0].link == null) // && inputs[1].link == null && inputs[2].link == null)
+        if (inputs[0].link == null)
         {
-            if (parsedFile.length != 0)
+            if (shader_atlas.length != 0)
             {
                 gl.disable(gl.BLEND);
-                var Node_VS_code = parsedFile["basicVS"];
-                var Node_FS_code = parsedFile["basicFS"];
+                var Node_VS_code = shader_atlas["basicVS"];
+                var Node_FS_code = shader_atlas["basicFS"];
 
                 if (Previous_VS !== Node_VS_code || Previous_FS !== Node_FS_code)
                 {
@@ -1367,37 +1542,19 @@ addNewNodes = function()
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
         var volume = this.getInputData(0);
-        var volume_uniforms = "";
         if(volume === undefined)
             volume = "";
         else {
-            volume_uniforms = "";
-
-            if (hasConnection(this, "Rotate"))
-                volume_uniforms += "\n" + parsedFile["Rotate"];
-            if (hasConnection(this, "Translate"))
-                volume_uniforms += parsedFile["Translate"];
-            if (hasConnection(this, "Scale"))
-                volume_uniforms += parsedFile["Scale"];
-            if (hasConnection(this, "Noise"))
-                volume_uniforms += parsedFile["Noise"];
-            if (hasConnection(this, "ColorRamp"))
-                volume_uniforms += parsedFile["ColorRamp"];
-            if (hasConnection(this, "Dicom"))
-                volume_uniforms += parsedFile["Dicom"];
-            else { // Need to move this part
-                 obj.model[0] = 1.0; obj.model[5] = 1.0; obj.model[10] = 1.0;
-            }
+            if (!hasConnection(this, "Dicom"))
+                entity._model_matrix[0] = 1.0; entity._model_matrix[5] = 1.0; entity._model_matrix[10] = 1.0;
         }
 
-        if (parsedFile.length != 0)
+        if (shader_atlas.length != 0)
         {
             //Create the final shader from the templates and the nodes
-            //VS
-            var Node_VS_code = parsedFile["volumeVS"];
-            //FS
-            var Node_FS_code = parsedFile["FSUniforms"] + volume_uniforms + "\n" +
-                parsedFile["FSMain"] + volume + parsedFile["FSReturn"];
+            var Node_VS_code = shader_atlas["volumeVS"];                                //VS
+            var Node_FS_code = shader_atlas["FSUniforms"] + nodes_uniforms + nodes_code 
+            + "\n" + shader_atlas["FSMain"] + volume + shader_atlas["FSReturn"];        //FS
 
             if (Previous_VS !== Node_VS_code || Previous_FS !== Node_FS_code)
             {
@@ -1407,48 +1564,11 @@ addNewNodes = function()
                 Previous_FS = Node_FS_code;
             }
         }
+
+        //Reset the uniforms and methods from the nodes, each iteration will fill it up
+        nodes_uniforms = "";
+        nodes_code = "";
     }
 
     LiteGraph.registerNodeType("Output/Material Output", MatOutput);
-}
-
-// ------------------------------------------ Usefull Functions ------------------------------------------ //
-
-// Says if a node is linked with another (distant check) forward
-function isConnected(node, destination_node)
-{
-    var curr_node;
-    for (var i = 0; i < node.outputs.length; i++)
-    {
-        curr_node = node.getOutputNodes(i);
-        if (curr_node == null)
-            continue;
-        curr_node = curr_node[0];
-        if (curr_node.title == destination_node)
-            return true;
-        if (curr_node.outputs == undefined)
-            continue;
-        if (isConnected(curr_node, destination_node))
-            return true;
-    }
-    return false;
-}
-
-// Says if a node has been linked with another (distant check) bakcward
-function hasConnection(node, destination_node)
-{
-    var curr_node;
-    for (var i = 0; i < node.inputs.length; i++)
-    {
-        curr_node = node.getInputNode(i);
-        if (curr_node == null)
-            continue;
-        if (curr_node.title == destination_node)
-            return true;
-        if (curr_node.inputs == undefined)
-            continue;
-        if (hasConnection(curr_node, destination_node))
-            return true;
-    }
-    return false;
 }

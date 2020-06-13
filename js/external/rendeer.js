@@ -2994,7 +2994,6 @@ function Camera( options )
 		if(options.aspect) this.aspect = options.aspect;
 	}
 	
-
 	this.updateMatrices();
 }
 
