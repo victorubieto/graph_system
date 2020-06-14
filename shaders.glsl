@@ -57,7 +57,7 @@ void main() {
 
     v_normal = (u_model * vec4( a_normal, 0.0) ).xyz; //a_normal
     v_coord = a_coord;
-    //gl_Position = u_mvp * vec4(v_pos,1.0);
+    
     gl_Position = u_mvp * vec4( v_world_pos, 1.0 );
 }
 
@@ -83,7 +83,6 @@ uniform float u_time;
 uniform float u_quality;
 uniform float u_brightness;
 uniform float u_obj_size;
-uniform sampler2D u_tf;
 
 \FSMain
 

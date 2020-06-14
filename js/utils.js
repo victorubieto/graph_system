@@ -24,7 +24,7 @@ function isConnected(node, destination_node)
 }
 
 // Says if a node has been linked with another (distant check) bakcward
-function hasConnection(node, destination_node)
+function wasConnected(node, destination_node)
 {
     var curr_node;
     for (var i = 0; i < node.inputs.length; i++)
@@ -36,10 +36,48 @@ function hasConnection(node, destination_node)
             return true;
         if (curr_node.inputs == undefined)
             continue;
-        if (hasConnection(curr_node, destination_node))
+        if (wasConnected(curr_node, destination_node))
             return true;
     }
     return false;
+}
+
+// Returns the list of the nodes connected (titles)
+function checkConnections(node, list, dir) // dir: 1 = both, 2 = inputs, 3 = outputs
+{
+	var _list = list || []; //continue or init the list
+	var direction = dir || 1; //specify the direction
+
+	var curr_node;
+	if (direction != 3 && node.inputs != undefined) // it will not enter if we are only checking the outputs
+		for (var i = 0; i < node.inputs.length; i++)
+		{
+			curr_node = node.getInputNode(i);
+			if (curr_node == null)
+				continue;
+			if (_list.includes(curr_node.title))
+				continue;
+			_list.push(curr_node.title);
+			if (curr_node.inputs == undefined)
+				continue;
+			checkConnections(curr_node, _list, 2);
+		}
+
+	if (direction != 2 && node.outputs != undefined) // it will not enter if we are only checking the inputs
+		for (var i = 0; i < node.outputs.length; i++)
+		{
+			curr_node = node.getOutputNodes(i);
+			if (curr_node == null)
+				continue;
+			if (_list.includes(curr_node.title))
+				continue;
+			_list.push(curr_node.title);
+			if (curr_node.outputs == undefined)
+				continue;
+			checkConnections(curr_node, _list, 3);
+		}
+
+	return _list;
 }
 
 // Pass to hexadecimal to rgb (in bright color the conversion gives some errors) 
@@ -83,10 +121,16 @@ function updateOptions(id)
             options.color_mesh = hexToRgb(objcolor.value);
             break;
         case "in_quality":
-            options.quality = document.getElementById('in_quality').value;
+			var quality = document.getElementById('in_quality').value;
+			//check that it is a number
+			quality = parseInt(quality);
+			if (Number.isInteger(quality)) options.quality = quality;
             break;
         case "in_brightness":
-            options.brightness = document.getElementById('in_brightness').value;
+			var brightness = document.getElementById('in_brightness').value;
+			//check that it is a number
+			brightness = parseInt(brightness);
+            if (Number.isInteger(brightness)) options.brightness = brightness;
             break;
     }
 }

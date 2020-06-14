@@ -6,9 +6,6 @@
 var Previous_VS = null;
 var Previous_FS = null;
 
-var nodes_code = "";
-var nodes_uniforms = "";
-
 const macros = {
     TEXTURE_TYPE: 1,
     NORMALIZE_VOXEL_VALUE: 1,
@@ -116,8 +113,8 @@ addNewNodes = function()
     LiteGraph.registerNodeType("Input/Color", ColorSelect);
 
 
-    // ------------------------------------------ TexCoord Node ------------------------------------------ //
-    function TexCoord() 
+    // ------------------------------------------ Coord Node ------------------------------------------ //
+    function CoordSelect() 
     {
         this.addOutput("Generated","vector");
         this.addOutput("Normal","vector");
@@ -126,10 +123,10 @@ addNewNodes = function()
         this.addOutput("Camera","vector");
     }
 
-    TexCoord.title = "TexCoord";
-    TexCoord.desc = "coordinate vectors selector";
+    CoordSelect.title = "Coordinates";
+    CoordSelect.desc = "coordinate vectors selector";
 
-    TexCoord.prototype.onExecute = function() 
+    CoordSelect.prototype.onExecute = function() 
     {
         if (!isConnected(this, "Material Output"))
             return;
@@ -141,7 +138,183 @@ addNewNodes = function()
         this.setOutputData(4, "u_camera_position"); // 
     };
 
-    LiteGraph.registerNodeType("Input/TexCoord", TexCoord);
+    LiteGraph.registerNodeType("Input/CoordSelect", CoordSelect);
+
+
+    // ------------------------------------------ TransferFunc Node ------------------------------------------ //
+    function TransferFunc() {
+        this.addOutput("Color", "color");
+		this.properties = { split_channels: false };
+		this._values = new Uint8Array(256*4);
+		this._values.fill(255);
+		this._curve_texture = null;
+		this._must_update = true;
+		this._points = {
+			RGBA: [[0,0],[1,1]],
+			R: [[0,0],[1,1]],
+			G: [[0,0],[1,1]],
+            B: [[0,0],[1,1]],
+            A: [[0,0],[1,1]]
+		};
+		this.curve_editor = null;
+		this.addWidget("toggle","Split Channels",false,"split_channels");
+		this.addWidget("combo","Channel","RGBA",{ values:["RGBA","R","G","B","A"]});
+		this.curve_offset = 68;
+		this.size = [ 240, 170 ];
+	}
+
+    TransferFunc.title = "Transfer Function";
+    TransferFunc.desc = "control the RGBA for each density value";
+
+	TransferFunc.prototype.onExecute = function() {
+        
+		if (!isConnected(this, "Material Output"))
+        return;
+
+		//if(this._must_update || !this._curve_texture )
+            this.updateCurve();
+        this._must_update = false;
+
+		var curve_texture = this._curve_texture;
+
+        shader.setUniform("u_tf", curve_texture.bind(1)); 
+
+        var color_tf = "texture(u_tf, vec2(clamp(v, 0.0, 1.0),0.5))";
+
+        this.setOutputData(0, color_tf);
+	};
+
+	TransferFunc.prototype.sampleCurve = function(f,points)
+	{
+		var points = points || this._points.RGBA;
+		if(!points)
+			return;
+		for(var i = 0; i < points.length - 1; ++i)
+		{
+			var p = points[i];
+			var pn = points[i+1];
+			if(pn[0] < f)
+				continue;
+			var r = (pn[0] - p[0]);
+			if( Math.abs(r) < 0.00001 )
+				return p[1];
+			var local_f = (f - p[0]) / r;
+			return p[1] * (1.0 - local_f) + pn[1] * local_f;
+		}
+		return 0;
+	}
+
+	TransferFunc.prototype.updateCurve = function()
+	{
+		var values = this._values;
+		var num = values.length / 4;
+		var split = this.properties.split_channels;
+		for(var i = 0; i < num; ++i)
+		{
+			if(split)
+			{
+				values[i*4] = Math.clamp( this.sampleCurve(i/num,this._points.R)*255,0,255);
+				values[i*4+1] = Math.clamp( this.sampleCurve(i/num,this._points.G)*255,0,255);
+                values[i*4+2] = Math.clamp( this.sampleCurve(i/num,this._points.B)*255,0,255);
+                values[i*4+3] = Math.clamp( this.sampleCurve(i/num,this._points.A)*255,0,255);
+			}
+			else
+			{
+				var v = this.sampleCurve(i/num);//sample curve
+				values[i*4] = values[i*4+1] = values[i*4+2] = values[i*4+3] = Math.clamp(v*255,0,255);
+			}
+		}
+		if(!this._curve_texture)
+			this._curve_texture = new GL.Texture(256,1,{ format: gl.RGBA, magFilter: gl.LINEAR, wrap: gl.CLAMP_TO_EDGE });
+		this._curve_texture.uploadData(values,null,true);
+	}
+
+	TransferFunc.prototype.onSerialize = function(o)
+	{
+		var curves = {};
+		for(var i in this._points)
+			curves[i] = this._points[i].concat();
+		o.curves = curves;
+	}
+
+	TransferFunc.prototype.onConfigure = function(o)
+	{
+		this._points = o.curves;
+		if(this.curve_editor)
+			curve_editor.points = this._points;
+		this._must_update = true;
+	}
+
+	TransferFunc.prototype.onMouseDown = function(e, localpos, graphcanvas)
+	{
+		if(this.curve_editor)
+		{
+            var r = this.curve_editor.onMouseDown([localpos[0],localpos[1]-this.curve_offset], graphcanvas);
+			if(r)
+				this.captureInput(true);
+			return r;
+        }
+	}
+
+	TransferFunc.prototype.onMouseMove = function(e, localpos, graphcanvas)
+	{
+		if(this.curve_editor)
+            return this.curve_editor.onMouseMove([localpos[0],localpos[1]-this.curve_offset], graphcanvas);
+	}
+
+	TransferFunc.prototype.onMouseUp = function(e, localpos, graphcanvas)
+	{
+		if(this.curve_editor)
+			return this.curve_editor.onMouseUp([localpos[0],localpos[1]-this.curve_offset], graphcanvas);
+		this.captureInput(false);
+	}
+
+	TransferFunc.channel_line_colors = { "RGBA":"#666","R":"#F33","G":"#3F3","B":"#33F","A":"#FF0" };
+
+	TransferFunc.prototype.onDrawBackground = function(ctx, graphcanvas)
+	{
+		if(this.flags.collapsed)
+			return;
+
+		if(!this.curve_editor)
+			this.curve_editor = new LiteGraph.CurveEditor(this._points.R);
+		ctx.save();
+		ctx.translate(0,this.curve_offset);
+		var channel = this.widgets[1].value;
+
+		if(this.properties.split_channels)
+		{
+			if(channel == "RGBA")
+			{
+				this.widgets[1].value = channel = "R";
+				this.widgets[1].disabled = false;
+			}
+			this.curve_editor.points = this._points.R;
+			this.curve_editor.draw( ctx, [this.size[0],this.size[1] - this.curve_offset], graphcanvas, "#111", TransferFunc.channel_line_colors.R, true );
+			ctx.globalCompositeOperation = "lighten";
+			this.curve_editor.points = this._points.G;
+			this.curve_editor.draw( ctx, [this.size[0],this.size[1] - this.curve_offset], graphcanvas, null, TransferFunc.channel_line_colors.G, true );
+			this.curve_editor.points = this._points.B;
+			this.curve_editor.draw( ctx, [this.size[0],this.size[1] - this.curve_offset], graphcanvas, null, TransferFunc.channel_line_colors.B, true );
+            this.curve_editor.points = this._points.A;
+			this.curve_editor.draw( ctx, [this.size[0],this.size[1] - this.curve_offset], graphcanvas, null, TransferFunc.channel_line_colors.A, true );
+            ctx.globalCompositeOperation = "source-over";
+		}
+		else
+		{
+			this.widgets[1].value = channel = "RGBA";
+			this.widgets[1].disabled = true;
+		}
+
+		this.curve_editor.points = this._points[channel];
+		this.curve_editor.draw( ctx, [this.size[0],this.size[1] - this.curve_offset], graphcanvas, this.properties.split_channels ? null : "#111", TransferFunc.channel_line_colors[channel]  );
+		ctx.restore();
+	}
+
+    TransferFunc.prototype.uniforms = `
+uniform sampler2D u_tf;`;
+
+	LiteGraph.registerNodeType("Input/Transfer Function", TransferFunc);
 
 
     // ------------------------------------------ Gradient Node ------------------------------------------ //
@@ -268,9 +441,6 @@ addNewNodes = function()
         if (!isConnected(this, "Material Output"))
             return;
 
-        nodes_uniforms += Noise.uniforms;
-        nodes_code += Noise.pixel_shader;
-
         shader.setUniform("scale", this.properties.scale);
         shader.setUniform("detail", this.properties.detail);
         shader.setUniform("distortion", 0.0); // en mi pc si uso esto me va a 1 fps como mucho
@@ -288,12 +458,12 @@ addNewNodes = function()
         this.setOutputData(1, noise_code);
     }
 
-    Noise.uniforms = `
+    Noise.prototype.uniforms = `
 uniform float scale;
 uniform float detail;
 uniform float distortion;`;
 
-    Noise.pixel_shader = `
+    Noise.prototype.pixel_shader = `
 
 // Noise functions
 float hash1( float n )
@@ -477,9 +647,6 @@ float cnoise( vec3 P )
         if (this.properties._volume === null)
             return;
 
-        nodes_uniforms += Dicom.uniforms;
-        nodes_code += Dicom.pixel_shader;
-
         entity._model_matrix[0] = this.properties._volume.width*this.properties._volume.widthSpacing;
         entity._model_matrix[5] = this.properties._volume.height*this.properties._volume.heightSpacing;
         entity._model_matrix[10] = this.properties._volume.depth*this.properties._volume.depthSpacing;
@@ -500,7 +667,7 @@ float cnoise( vec3 P )
         this.setOutputData(0, dicom_code);
     }
 
-    Dicom.uniforms = `
+    Dicom.prototype.uniforms = `
 uniform vec3 u_resolution;
 uniform float u_min_value;
 uniform float u_max_value;
@@ -514,7 +681,7 @@ uniform usampler3D u_volume_texture;
 #endif
 `;
 
-    Dicom.pixel_shader = `
+    Dicom.prototype.pixel_shader = `
 
 // Dicom function
 vec4 getVoxel(vec3 p)
@@ -535,8 +702,7 @@ vec4 getVoxel(vec3 p)
     #endif
     
     return v;
-}
-`;
+}`;
 
     LiteGraph.registerNodeType("Texture/Dicom", Dicom);
 
@@ -824,8 +990,6 @@ vec4 getVoxel(vec3 p)
         if (!isConnected(this, "Material Output"))
             return;
 
-        nodes_code += ColorRamp.pixel_shader;
-
         var input = this.getInputData(0);
         if(input === undefined)
             input = "0.0";
@@ -837,7 +1001,7 @@ vec4 getVoxel(vec3 p)
         this.setOutputData(1, ramp_code);
     }
 
-    ColorRamp.pixel_shader = `
+    ColorRamp.prototype.pixel_shader = `
 
 // ColorRamp function    
 vec4 colorRamp(float fac, float clamp_min, float clamp_max){
@@ -849,8 +1013,7 @@ vec4 colorRamp(float fac, float clamp_min, float clamp_max){
         value =  clamp(fac, clamp_max, 1.0);
     }
     return vec4(vec3(value), 1.0);
-}
-`;
+}`;
 
     LiteGraph.registerNodeType("Operator/ColorRamp", ColorRamp);
 
@@ -936,8 +1099,6 @@ vec4 colorRamp(float fac, float clamp_min, float clamp_max){
         if (!isConnected(this, "Material Output"))
             return;
 
-        nodes_code += Translate.pixel_shader;
-
         var vector = this.getInputData(0);
         if(vector === undefined)
             vector = "sample_pos";
@@ -951,13 +1112,12 @@ vec4 colorRamp(float fac, float clamp_min, float clamp_max){
         this.setOutputData(0, translation_code);
     }
 
-    Translate.pixel_shader = `
+    Translate.prototype.pixel_shader = `
 
 // Translate function
 vec3 setTranslation(vec3 vector, float x, float y, float z){
     return vector + vec3(x, y, z);
-}
-`;
+}`;
 
     LiteGraph.registerNodeType("Operator/Translate", Translate);
 
@@ -1043,8 +1203,6 @@ vec3 setTranslation(vec3 vector, float x, float y, float z){
         if (!isConnected(this, "Material Output"))
             return;
 
-        nodes_code += Scale.pixel_shader;
-
         var vector = this.getInputData(0);
         if(vector === undefined)
             vector = "sample_pos";
@@ -1058,13 +1216,12 @@ vec3 setTranslation(vec3 vector, float x, float y, float z){
         this.setOutputData(0, scale_code);
     }
 
-    Scale.pixel_shader = `
+    Scale.prototype.pixel_shader = `
 
 // Scale function
 vec3 setScale(vec3 vector, float x, float y, float z){
     return vector * vec3(x, y, z);
-}    
-`;
+}`;
 
     LiteGraph.registerNodeType("Operator/Scale", Scale);
 
@@ -1150,8 +1307,6 @@ vec3 setScale(vec3 vector, float x, float y, float z){
         if (!isConnected(this, "Material Output"))
             return;
 
-        nodes_code += Rotate.pixel_shader;
-
         var vector = this.getInputData(0);
         if(vector === undefined)
             vector = "sample_pos";
@@ -1165,7 +1320,7 @@ vec3 setScale(vec3 vector, float x, float y, float z){
         this.setOutputData(0, rotate_code);
     }
 
-    Rotate.pixel_shader = `
+    Rotate.prototype.pixel_shader = `
 
 // Rotate functions
 #define M_PI 3.1415926535897932384626433832795        
@@ -1190,189 +1345,9 @@ vec3 setRotation(vec3 vector, float x, float y, float z){
     result3.z = result2.z;
     
     return result3;
-}
-`;
+}`;
 
     LiteGraph.registerNodeType("Operator/Rotate", Rotate);
-
-
-    // ------------------------------------------ TransferFunc Node ------------------------------------------ //
-    function TransferFunc() {
-        this.addOutput("Color", "color");
-        var lowtex = 3; //create new texture with low precision (byte)
-		this.properties = { precision: lowtex, split_channels: false };
-		this._values = new Uint8Array(256*4);
-		this._values.fill(255);
-		this._curve_texture = null;
-		this._must_update = true;
-		this._points = {
-			RGBA: [[0,0],[1,1]],
-			R: [[0,0],[1,1]],
-			G: [[0,0],[1,1]],
-            B: [[0,0],[1,1]],
-            A: [[0,0],[1,1]]
-		};
-		this.curve_editor = null;
-		this.addWidget("toggle","Split Channels",false,"split_channels");
-		this.addWidget("combo","Channel","RGBA",{ values:["RGBA","R","G","B","A"]});
-		this.curve_offset = 68;
-		this.size = [ 240, 170 ];
-	}
-
-    TransferFunc.title = "Transfer Function";
-    TransferFunc.desc = "control the RGBA for each density value";
-
-	TransferFunc.prototype.onExecute = function() {
-        
-		if (!isConnected(this, "Material Output"))
-        return;
-
-        nodes_uniforms += TransferFunc.uniforms;
-
-		//if(this._must_update || !this._curve_texture )
-            this.updateCurve();
-        this._must_update = false;
-
-		var curve_texture = this._curve_texture;
-
-        shader.setUniform("u_tf", curve_texture.bind(1)); 
-
-        var color_tf = "texture(u_tf, vec2(clamp(v, 0.0, 1.0),1.0))";
-
-        this.setOutputData(0, color_tf);
-	};
-
-	TransferFunc.prototype.sampleCurve = function(f,points)
-	{
-		var points = points || this._points.RGBA;
-		if(!points)
-			return;
-		for(var i = 0; i < points.length - 1; ++i)
-		{
-			var p = points[i];
-			var pn = points[i+1];
-			if(pn[0] < f)
-				continue;
-			var r = (pn[0] - p[0]);
-			if( Math.abs(r) < 0.00001 )
-				return p[1];
-			var local_f = (f - p[0]) / r;
-			return p[1] * (1.0 - local_f) + pn[1] * local_f;
-		}
-		return 0;
-	}
-
-	TransferFunc.prototype.updateCurve = function()
-	{
-		var values = this._values;
-		var num = values.length / 4;
-		var split = this.properties.split_channels;
-		for(var i = 0; i < num; ++i)
-		{
-			if(split)
-			{
-				values[i*4] = Math.clamp( this.sampleCurve(i/num,this._points.R)*255,0,255);
-				values[i*4+1] = Math.clamp( this.sampleCurve(i/num,this._points.G)*255,0,255);
-                values[i*4+2] = Math.clamp( this.sampleCurve(i/num,this._points.B)*255,0,255);
-                values[i*4+3] = Math.clamp( this.sampleCurve(i/num,this._points.A)*255,0,255);
-			}
-			else
-			{
-				var v = this.sampleCurve(i/num);//sample curve
-				values[i*4] = values[i*4+1] = values[i*4+2] = values[i*4+3] = Math.clamp(v*255,0,255);
-			}
-		}
-		if(!this._curve_texture)
-			this._curve_texture = new GL.Texture(256,1,{ format: gl.RGBA, magFilter: gl.LINEAR, wrap: gl.CLAMP_TO_EDGE });
-		this._curve_texture.uploadData(values,null,true);
-	}
-
-	TransferFunc.prototype.onSerialize = function(o)
-	{
-		var curves = {};
-		for(var i in this._points)
-			curves[i] = this._points[i].concat();
-		o.curves = curves;
-	}
-
-	TransferFunc.prototype.onConfigure = function(o)
-	{
-		this._points = o.curves;
-		if(this.curve_editor)
-			curve_editor.points = this._points;
-		this._must_update = true;
-	}
-
-	TransferFunc.prototype.onMouseDown = function(e, localpos, graphcanvas)
-	{
-		if(this.curve_editor)
-		{
-            var r = this.curve_editor.onMouseDown([localpos[0],localpos[1]-this.curve_offset], graphcanvas);
-			if(r)
-				this.captureInput(true);
-			return r;
-        }
-	}
-
-	TransferFunc.prototype.onMouseMove = function(e, localpos, graphcanvas)
-	{
-		if(this.curve_editor)
-            return this.curve_editor.onMouseMove([localpos[0],localpos[1]-this.curve_offset], graphcanvas);
-	}
-
-	TransferFunc.prototype.onMouseUp = function(e, localpos, graphcanvas)
-	{
-		if(this.curve_editor)
-			return this.curve_editor.onMouseUp([localpos[0],localpos[1]-this.curve_offset], graphcanvas);
-		this.captureInput(false);
-	}
-
-	TransferFunc.channel_line_colors = { "RGBA":"#666","R":"#F33","G":"#3F3","B":"#33F","A":"#FF0" };
-
-	TransferFunc.prototype.onDrawBackground = function(ctx, graphcanvas)
-	{
-		if(this.flags.collapsed)
-			return;
-
-		if(!this.curve_editor)
-			this.curve_editor = new LiteGraph.CurveEditor(this._points.R);
-		ctx.save();
-		ctx.translate(0,this.curve_offset);
-		var channel = this.widgets[1].value;
-
-		if(this.properties.split_channels)
-		{
-			if(channel == "RGBA")
-			{
-				this.widgets[1].value = channel = "R";
-				this.widgets[1].disabled = false;
-			}
-			this.curve_editor.points = this._points.R;
-			this.curve_editor.draw( ctx, [this.size[0],this.size[1] - this.curve_offset], graphcanvas, "#111", TransferFunc.channel_line_colors.R, true );
-			ctx.globalCompositeOperation = "lighten";
-			this.curve_editor.points = this._points.G;
-			this.curve_editor.draw( ctx, [this.size[0],this.size[1] - this.curve_offset], graphcanvas, null, TransferFunc.channel_line_colors.G, true );
-			this.curve_editor.points = this._points.B;
-			this.curve_editor.draw( ctx, [this.size[0],this.size[1] - this.curve_offset], graphcanvas, null, TransferFunc.channel_line_colors.B, true );
-            this.curve_editor.points = this._points.A;
-			this.curve_editor.draw( ctx, [this.size[0],this.size[1] - this.curve_offset], graphcanvas, null, TransferFunc.channel_line_colors.A, true );
-            ctx.globalCompositeOperation = "source-over";
-		}
-		else
-		{
-			this.widgets[1].value = channel = "RGBA";
-			this.widgets[1].disabled = true;
-		}
-
-		this.curve_editor.points = this._points[channel];
-		this.curve_editor.draw( ctx, [this.size[0],this.size[1] - this.curve_offset], graphcanvas, this.properties.split_channels ? null : "#111", TransferFunc.channel_line_colors[channel]  );
-		ctx.restore();
-	}
-
-    TransferFunc.uniforms = `
-uniform sampler2D u_tf;`;
-
-	LiteGraph.registerNodeType("Operator/Transfer Function", TransferFunc);
 
 
     // ------------------------------------------ Volume Node ------------------------------------------ //
@@ -1380,7 +1355,7 @@ uniform sampler2D u_tf;`;
     {
         this.addInput("Color", "color");
         this.addInput("Density", "value");
-        this.addOutput("Volume", "Fcolor");
+        this.addOutput("Volume", "Fragcolor");
 
         this.properties = {
             density: 1.0,
@@ -1392,6 +1367,12 @@ uniform sampler2D u_tf;`;
             this.setValue.bind(this),
             {min: 0, max: 10}
         )
+        this.modifiers = {
+            _density: null,
+            _color: null,
+            _tf: null,
+            _jitter: null
+        }
     }
 
     Volume.title = "Volume";
@@ -1429,9 +1410,6 @@ uniform sampler2D u_tf;`;
         if (!isConnected(this, "Material Output"))
             return;
 
-        nodes_uniforms += Volume.uniforms;
-        nodes_code += Volume.pixel_shader;
-
         var color = this.getInputData(0);
         if(color === undefined)
             color = `0.5,0.5,0.5,1.0`;
@@ -1447,8 +1425,18 @@ uniform sampler2D u_tf;`;
             density = this.toString(density);
         }
 
-        shader.setUniform("u_jitter_factor", 0.1); 
-        
+        this.modifiers._density = density;
+        this.modifiers._color = color;
+        this.modifiers._tf = wasConnected(this, "Transfer Function");
+        this.modifiers._jitter = wasConnected(this, "Dicom");
+
+        var volume_code = this.completeShader(this.modifiers);
+
+        this.setOutputData(0, volume_code);
+    }  
+
+    Volume.prototype.completeShader = function(modifiers)
+    {
         var volume_code = `
     vec3 ray_origin = v_pos;
     vec3 ray_direction = normalize(ray_origin - u_local_camera_position);
@@ -1456,35 +1444,47 @@ uniform sampler2D u_tf;`;
     vec3 ray_step = ray_direction / u_quality;
     float d = length(ray_step);
     vec4 sample_color;
-    // only use jitter with loaded datasets
-    sample_pos = sample_pos - (ray_step * random() * u_jitter_factor);
-
-    for(int i=0; i<100000; i++){     
-
-        float v = ` + density + `;
-        
-        sample_color = vec4(` + color + `);
+    `;
+        if (modifiers._jitter) volume_code += `
+    sample_pos = sample_pos - (ray_step * random());
+    `;
+        if (modifiers._tf) volume_code += `
+    for(int i=0; i<100000; i++)
+    { 
+        float v = ` + modifiers._density + `;
+        sample_color = vec4(` +  modifiers._color + `);
         sample_color = vec4(sample_color.xyz, v * sample_color.w);
+        `;
+        else volume_code += `
+    for(int i=0; i<100000; i++)
+    {
+        float v = ` +  modifiers._density + `;
+        sample_color = vec4(` +  modifiers._color + `);
+        sample_color = vec4(sample_color.xyz, v * sample_color.w);
+        `;
+
+        volume_code += `
         //transparency, applied this way to avoid color bleeding
         sample_color.xyz = sample_color.xyz * sample_color.w; 
                
         final_color = d * sample_color * (1.0 - final_color.w) + final_color; //compositing with previous value
-        if(final_color.w >= 1.0) break;
+        if (final_color.w >= 1.0) break;
         
         sample_pos = sample_pos + ray_step;
 
         vec3 abss = abs(sample_pos);
-        if(i > 1 && (abss.x > u_obj_size || abss.y > u_obj_size || abss.z > u_obj_size)) break;
+        if (i > 1 && (abss.x > u_obj_size || abss.y > u_obj_size || abss.z > u_obj_size)) break;
     }
+
     `;
 
-        this.setOutputData(0, volume_code);
-    }  
+        return volume_code;
+    }
   
-    Volume.uniforms = `
+    Volume.prototype.uniforms = `
 uniform float u_jitter_factor;`;
 
-    Volume.pixel_shader = `
+    Volume.prototype.pixel_shader = `
 
 float random(){
     return fract(sin(dot(v_pos.xy, vec2(12.9898,78.233))) * 43758.5453123);
@@ -1497,7 +1497,9 @@ float random(){
     // ------------------------------------------ Output Node ------------------------------------------ //
     function MatOutput()
     {
-        this.addInput("Frag Color", "Fcolor");
+        this.addInput("Frag Color", "Fragcolor");
+
+        this.nodes_info;
     }
 
     MatOutput.title = "Material Output";
@@ -1517,8 +1519,7 @@ float random(){
         this.strokeStyle = "black";
 
         // Check if it has inputs linked
-        var inputs = this.inputs;
-        if (inputs[0].link == null)
+        if (this.inputs[0].link == null)
         {
             if (shader_atlas.length != 0)
             {
@@ -1536,25 +1537,26 @@ float random(){
             }
             return;
         }
-        
+
+        //set flags for volumetric render
         gl.enable(gl.BLEND);
-        //gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+	    // Fill the string of uniforms and methods from the nodes in use
+        this.nodes_info = this.generateNodesCode();
+        if (!this.nodes_info.list.includes("Dicom"))
+            entity._model_matrix[0] = 1.0; entity._model_matrix[5] = 1.0; entity._model_matrix[10] = 1.0;
 
         var volume = this.getInputData(0);
         if(volume === undefined)
             volume = "";
-        else {
-            if (!hasConnection(this, "Dicom"))
-                entity._model_matrix[0] = 1.0; entity._model_matrix[5] = 1.0; entity._model_matrix[10] = 1.0;
-        }
 
         if (shader_atlas.length != 0)
         {
             //Create the final shader from the templates and the nodes
-            var Node_VS_code = shader_atlas["volumeVS"];                                //VS
-            var Node_FS_code = shader_atlas["FSUniforms"] + nodes_uniforms + nodes_code 
-            + "\n" + shader_atlas["FSMain"] + volume + shader_atlas["FSReturn"];        //FS
+            var Node_VS_code = shader_atlas["volumeVS"];                                                    //VS
+            var Node_FS_code = shader_atlas["FSUniforms"] + this.nodes_info.nodes_uniforms + 
+            this.nodes_info.nodes_code + "\n" + shader_atlas["FSMain"] + volume + shader_atlas["FSReturn"]; //FS
 
             if (Previous_VS !== Node_VS_code || Previous_FS !== Node_FS_code)
             {
@@ -1564,10 +1566,23 @@ float random(){
                 Previous_FS = Node_FS_code;
             }
         }
+    }
 
-        //Reset the uniforms and methods from the nodes, each iteration will fill it up
-        nodes_uniforms = "";
-        nodes_code = "";
+    MatOutput.prototype.generateNodesCode = function()
+    {
+        var nodes_info = {
+            list: null,
+            nodes_uniforms: "",
+            nodes_code: ""
+        };
+        nodes_info.list = checkConnections(this);
+        for (var i = (nodes_info.list.length - 1); i >= 0; i--)
+        {
+            var node = this.graph.findNodeByTitle(nodes_info.list[i]);
+            if (node.uniforms) nodes_info.nodes_uniforms += node.uniforms;
+            if (node.pixel_shader) nodes_info.nodes_code += node.pixel_shader;
+        }
+        return nodes_info; 
     }
 
     LiteGraph.registerNodeType("Output/Material Output", MatOutput);

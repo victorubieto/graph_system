@@ -15,7 +15,7 @@ var mouse = null;
 var entity = null;
 
 const options = {
-    quality: 100.0,
+    quality: 40.0,
     color_bg: [0.5,0.5,0.5,1.0],
     color_mesh: [1.0,0.0,0.0,1.0],
     brightness: 1.0
@@ -177,27 +177,64 @@ function loadShaderTemplates()
 // Basic Template that inits the web with the essential nodes
 function graphTemplate()
 {
-    var node_color = LiteGraph.createNode("Input/Color");
-    node_color.pos = [100,100];
-    graph.add(node_color);
-
     var node_dicom = LiteGraph.createNode("Texture/Dicom");
-    node_dicom.pos = [100, 250];
+    node_dicom.pos = [100, 300];
     graph.add(node_dicom);
 
-    var node_tf = LiteGraph.createNode("Operator/Transfer Function");
-    node_tf.pos = [200, 400];
+    var node_tf = LiteGraph.createNode("Input/Transfer Function");
+    node_tf.pos = [65, 75];
     graph.add(node_tf);
 
+    var node_color = LiteGraph.createNode("Input/Color");
+    node_color.pos = [350,75];
+    graph.add(node_color);
+
+    var node_math = LiteGraph.createNode("Operator/Math");
+    node_math.pos = [300,350];
+    node_math.properties.OP = "*";
+    graph.add(node_math);
+
+    var node_tra1 = LiteGraph.createNode("Operator/Translate");
+    node_tra1.pos = [50,575];
+    node_tra1.setY(-1.0);
+    graph.add(node_tra1);
+
+    var node_noise = LiteGraph.createNode("Texture/Noise");
+    node_noise.pos = [50,400];
+    node_noise.setScale(2.0);
+    node_noise.setDetail(2.0);
+    graph.add(node_noise);
+
+    var node_rot = LiteGraph.createNode("Operator/Rotate");
+    node_rot.pos = [550,575];
+    node_rot.setZ(-90.0);
+    graph.add(node_rot);
+
+    var node_tra2 = LiteGraph.createNode("Operator/Translate");
+    node_tra2.pos = [300,575];
+    node_tra2.setY(-1.0);
+    graph.add(node_tra2);
+
+    var node_grad = LiteGraph.createNode("Texture/Gradient");
+    node_grad.pos = [450,400];
+    graph.add(node_grad);
+
     var node_volume = LiteGraph.createNode("Shader/Volume");
-    node_volume.pos = [350,150];
+    node_volume.pos = [350,175];
     graph.add(node_volume);
 
     var node_out = LiteGraph.createNode("Output/Material Output");
-    node_out.pos = [600,200];
+    node_out.pos = [600,250];
     graph.add(node_out);
 
     //Connections
+    node_color.connect(0, node_volume, 0);
+    node_math.connect(0, node_volume, 1);
+    node_tra1.connect(0, node_noise, 0);
+    node_noise.connect(1, node_math, 0);
+    node_tra2.connect(0, node_rot, 0);
+    node_rot.connect(0, node_grad, 0);
+    node_grad.connect(1, node_math, 1);
     node_volume.connect(0, node_out, 0);   
 }
 
@@ -249,7 +286,8 @@ function createScene()
 // Main Loop
 function onLoad()
 {
-    window.graph.runStep(); //falta mirar el callback (tengo puesto que se ejecuta siempre porque se ha de comprovar si ha habido cambios en los widgets)
+    //falta mirar el callback (tengo puesto que se ejecuta siempre porque se ha de comprovar si ha habido cambios en los widgets)
+    window.graph.runStep(); 
 
     time.last = time.now || 0;
 	time.now = getTime();
