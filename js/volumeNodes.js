@@ -544,7 +544,7 @@ float cnoise( vec3 P )
     // ------------------------------------------ Dicom Node ------------------------------------------ //
     function Dicom()
     {
-        this.addOutput("Dataset", "value");
+        this.addOutput("Density", "value");
 
         this.properties = {
             _volume: null,
