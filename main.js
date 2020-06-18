@@ -15,9 +15,9 @@ var mouse = null;
 var entity = null;
 
 const options = {
-    quality: 40.0,
+    quality: 30.0,
     color_bg: [0.5,0.5,0.5,1.0],
-    color_mesh: [1.0,0.0,0.0,1.0],
+    color_mesh: [1.0,0.0,1.0,1.0],
     brightness: 1.0
 }
 
@@ -44,9 +44,9 @@ function init()
 
     //  ----- LOAD MATERIAL NEEDED -----
     //Load the shaders from a file
-    loadShaderTemplates();    
-    //Load the new nodes created
-    addNewNodes();
+    loadShaderAtlas();
+    //Load the nodes created
+    addNodes();
 
     //  ----- INIT BASIC SCENE -----
     //Creates some essential nodes on the initial canvas
@@ -167,7 +167,7 @@ function initListeners()
 }
 
 // This function reads the file that contains the shaders and store them
-function loadShaderTemplates()
+function loadShaderAtlas()
 {
     GL.loadFileAtlas("shaders.glsl", function(files){
 		shader_atlas = files; //parsed file
@@ -295,7 +295,7 @@ function onLoad()
 	update(time.dt);
     render();
 
-    requestAnimationFrame( onLoad.bind(this) );    
+    requestAnimationFrame( onLoad.bind(this) );
 }
 
 function render()

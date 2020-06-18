@@ -11,7 +11,7 @@ const macros = {
     NORMALIZE_VOXEL_VALUE: 1,
 }
 
-addNewNodes = function()
+addNodes = function()
 {
     // ------------------------------------------ Number Node ------------------------------------------ //
     function NumberSelect() 
@@ -28,6 +28,7 @@ addNewNodes = function()
             {min: 0, max: 10}
         );
         this.widgets_up = true;
+        this.color = "#7c2a31";
     }
 
     NumberSelect.title = "Number";
@@ -57,6 +58,7 @@ addNewNodes = function()
         this.properties = {
             color: [0.5,0.5,0.5,1.0],
         };
+        this.color = "#7c2a31";
     }
     
     ColorSelect.title = "Color";
@@ -121,6 +123,7 @@ addNewNodes = function()
         this.addOutput("UV","vector");
         this.addOutput("Object","vector");
         this.addOutput("Camera","vector");
+        this.color = "#7c2a31";
     }
 
     CoordSelect.title = "Coordinates";
@@ -160,7 +163,8 @@ addNewNodes = function()
 		this.addWidget("toggle","Split Channels",false,"split_channels");
 		this.addWidget("combo","Channel","RGBA",{ values:["RGBA","R","G","B","A"]});
 		this.curve_offset = 68;
-		this.size = [ 240, 170 ];
+        this.size = [ 240, 170 ];
+        this.color = "#7c2a31";
 	}
 
     TransferFunc.title = "Transfer Function";
@@ -334,6 +338,7 @@ uniform sampler2D u_tf;`;
             this.setValue.bind(this),
             {values: ["Linear", "Quadratic", "Diagonal", "Spherical"]}
         );
+        this.color = "#a06236";
     }
 
     Gradient.title = "Gradient";
@@ -419,10 +424,11 @@ uniform sampler2D u_tf;`;
             {values: [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]}
         );
         this.toggle = this.addWidget("toggle","Movement", false, function(v){}, { on: "enabled", off:"disabled"} );
+        this.color = "#a06236";
     }
     
     Noise.title = "Noise";
-    Noise.desc = "gives a random value using perlin noise algorithm";
+    Noise.desc = "gives a random value using Value Noise algorithm";
 
     Noise.prototype.setScale = function(v)
     {
@@ -605,7 +611,7 @@ float cnoise( vec3 P )
         if(response.status == VolumeLoader.DONE){
             console.log("Volume loaded.");
             this.properties._volume = response.volume;
-            this.color = "#803333"; //use color to remark the usefull output node
+            this.color = "#a06236"; //use color to remark the usefull output node
             
             this.properties.state = "Loaded!";
             var elem = document.getElementById("state");
@@ -716,6 +722,7 @@ vec4 getVoxel(vec3 p)
         this.addProperty("A", 1);
         this.addProperty("B", 1);
         this.addProperty("OP", "+", "enum", { values: MathOperation.values });
+        this.color = "#4987af";
     }
 
     MathOperation.values = ["+", "-", "*", "/", "%", "^", "max", "min"];
@@ -851,6 +858,7 @@ vec4 getVoxel(vec3 p)
         this.addInput("Color", "color");
         this.addOutput("Color", "color");
         this.addOutput("Fac", "value");
+        this.color = "#4987af";
     }
 
     MixColor.title = "MixRGB";
@@ -947,6 +955,7 @@ vec4 getVoxel(vec3 p)
             this.setMaxValue.bind(this),
             {min: 0.5, max: 1.0}
         );
+        this.color = "#4987af";
     }
 
     ColorRamp.title = "ColorRamp";
@@ -1050,6 +1059,7 @@ vec4 colorRamp(float fac, float clamp_min, float clamp_max){
             this.setZ.bind(this),
             {min: -100, max: 100}
         );
+        this.color = "#4987af";
     }
 
     Translate.title = "Translate";
@@ -1154,6 +1164,7 @@ vec3 setTranslation(vec3 vector, float x, float y, float z){
             this.setZ.bind(this),
             {min: 0, max: 100}
         );
+        this.color = "#4987af";
     }
 
     Scale.title = "Scale";
@@ -1258,6 +1269,7 @@ vec3 setScale(vec3 vector, float x, float y, float z){
             this.setZ.bind(this),
             {min: -360, max: 360}
         );
+        this.color = "#4987af";
     }
 
     Rotate.title = "Rotate";
@@ -1356,7 +1368,7 @@ vec3 setRotation(vec3 vector, float x, float y, float z){
         this.addInput("Color", "color");
         this.addInput("Density", "value");
         this.addOutput("Volume", "Fragcolor");
-
+        
         this.properties = {
             density: 1.0,
         }
@@ -1370,9 +1382,9 @@ vec3 setRotation(vec3 vector, float x, float y, float z){
         this.modifiers = {
             _density: null,
             _color: null,
-            _tf: null,
             _jitter: null
         }
+        this.color = "#2c8a5d";
     }
 
     Volume.title = "Volume";
@@ -1427,8 +1439,7 @@ vec3 setRotation(vec3 vector, float x, float y, float z){
 
         this.modifiers._density = density;
         this.modifiers._color = color;
-        this.modifiers._tf = wasConnected(this, "Transfer Function");
-        this.modifiers._jitter = wasConnected(this, "Dicom");
+        //this.modifiers._jitter = wasConnected(this, "Dicom");
 
         var volume_code = this.completeShader(this.modifiers);
 
@@ -1445,25 +1456,18 @@ vec3 setRotation(vec3 vector, float x, float y, float z){
     float d = length(ray_step);
     vec4 sample_color;
     `;
+
         if (modifiers._jitter) volume_code += `
     sample_pos = sample_pos - (ray_step * random());
     `;
-        if (modifiers._tf) volume_code += `
-    for(int i=0; i<100000; i++)
-    { 
-        float v = ` + modifiers._density + `;
-        sample_color = vec4(` +  modifiers._color + `);
-        sample_color = vec4(sample_color.xyz, v * sample_color.w);
-        `;
-        else volume_code += `
+    
+    volume_code += `
     for(int i=0; i<100000; i++)
     {
         float v = ` +  modifiers._density + `;
         sample_color = vec4(` +  modifiers._color + `);
         sample_color = vec4(sample_color.xyz, v * sample_color.w);
-        `;
 
-        volume_code += `
         //transparency, applied this way to avoid color bleeding
         sample_color.xyz = sample_color.xyz * sample_color.w; 
                
@@ -1515,7 +1519,7 @@ float random(){
             if (this.graph._nodes_by_id[i].title == "Material Output")
                 return;
         }
-        this.color = "#233"; //use color to remark the usefull output node
+        this.color = "#83109C"; //use color to remark the usefull output node   
         this.strokeStyle = "black";
 
         // Check if it has inputs linked
@@ -1586,4 +1590,86 @@ float random(){
     }
 
     LiteGraph.registerNodeType("Output/Material Output", MatOutput);
+}
+
+
+/*************************************************
+ * Functions to Control the links in the graph *
+*************************************************/
+
+// Says if a node is linked with another (distant check) forward
+function isConnected(node, destination_node)
+{
+    var curr_node;
+    for (var i = 0; i < node.outputs.length; i++)
+    {
+        curr_node = node.getOutputNodes(i);
+        if (curr_node == null)
+            continue;
+        curr_node = curr_node[0];
+        if (curr_node.title == destination_node)
+            return true;
+        if (curr_node.outputs == undefined)
+            continue;
+        if (isConnected(curr_node, destination_node))
+            return true;
+    }
+    return false;
+}
+
+// Says if a node has been linked with another (distant check) bakcward
+function wasConnected(node, destination_node)
+{
+    var curr_node;
+    for (var i = 0; i < node.inputs.length; i++)
+    {
+        curr_node = node.getInputNode(i);
+        if (curr_node == null)
+            continue;
+        if (curr_node.title == destination_node)
+            return true;
+        if (curr_node.inputs == undefined)
+            continue;
+        if (wasConnected(curr_node, destination_node))
+            return true;
+    }
+    return false;
+}
+
+// Returns the list of the nodes connected (titles)
+function checkConnections(node, list, dir) // dir: 1 = both, 2 = inputs, 3 = outputs
+{
+	var _list = list || []; //continue or init the list
+	var direction = dir || 1; //specify the direction
+
+	var curr_node;
+	if (direction != 3 && node.inputs != undefined) // it will not enter if we are only checking the outputs
+		for (var i = 0; i < node.inputs.length; i++)
+		{
+			curr_node = node.getInputNode(i);
+			if (curr_node == null)
+				continue;
+			if (_list.includes(curr_node.title))
+				continue;
+			_list.push(curr_node.title);
+			if (curr_node.inputs == undefined)
+				continue;
+			checkConnections(curr_node, _list, 2);
+		}
+
+	if (direction != 2 && node.outputs != undefined) // it will not enter if we are only checking the inputs
+		for (var i = 0; i < node.outputs.length; i++)
+		{
+			curr_node = node.getOutputNodes(i);
+			if (curr_node == null)
+				continue;
+			if (_list.includes(curr_node.title))
+				continue;
+			_list.push(curr_node.title);
+			if (curr_node.outputs == undefined)
+				continue;
+			checkConnections(curr_node, _list, 3);
+		}
+
+	return _list;
 }
