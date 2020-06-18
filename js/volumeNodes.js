@@ -1439,7 +1439,7 @@ vec3 setRotation(vec3 vector, float x, float y, float z){
 
         this.modifiers._density = density;
         this.modifiers._color = color;
-        //this.modifiers._jitter = wasConnected(this, "Dicom");
+        this.modifiers._jitter = wasConnected(this, "Dicom");
 
         var volume_code = this.completeShader(this.modifiers);
 
