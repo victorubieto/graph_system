@@ -177,20 +177,13 @@ function loadShaderAtlas()
 // Basic Template that inits the web with the essential nodes
 function graphTemplate()
 {
-    var node_dicom = LiteGraph.createNode("Texture/Dicom");
-    node_dicom.pos = [100, 300];
-    graph.add(node_dicom);
-
-    var node_tf = LiteGraph.createNode("Input/Transfer Function");
-    node_tf.pos = [65, 75];
-    graph.add(node_tf);
-
     var node_color = LiteGraph.createNode("Input/Color");
-    node_color.pos = [350,75];
+    node_color.pos = [150,75];
+    node_color.setValue([1.0,1.0,1.0]);
     graph.add(node_color);
 
     var node_math = LiteGraph.createNode("Operator/Math");
-    node_math.pos = [300,350];
+    node_math.pos = [150,250];
     node_math.properties.OP = "*";
     graph.add(node_math);
 
