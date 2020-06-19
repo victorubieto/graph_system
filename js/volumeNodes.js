@@ -175,8 +175,7 @@ addNodes = function()
 		if (!isConnected(this, "Material Output"))
         return;
 
-		//if(this._must_update || !this._curve_texture )
-            this.updateCurve();
+        this.updateCurve();
         this._must_update = false;
 
 		var curve_texture = this._curve_texture;
@@ -224,7 +223,7 @@ addNodes = function()
 			}
 			else
 			{
-				var v = this.sampleCurve(i/num);//sample curve
+				var v = this.sampleCurve(i/num); //sample curve
 				values[i*4] = values[i*4+1] = values[i*4+2] = values[i*4+3] = Math.clamp(v*255,0,255);
 			}
 		}
@@ -449,7 +448,7 @@ uniform sampler2D u_tf;`;
 
         shader.setUniform("scale", this.properties.scale);
         shader.setUniform("detail", this.properties.detail);
-        shader.setUniform("distortion", 0.0); // en mi pc si uso esto me va a 1 fps como mucho
+        shader.setUniform("distortion", 0.0); // very expensive computationally
         if (this.toggle.value) shader.setUniform("u_time", time.now/1000);
         else shader.setUniform("u_time", 0.0);
 

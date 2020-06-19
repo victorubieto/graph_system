@@ -279,7 +279,6 @@ function createScene()
 // Main Loop
 function onLoad()
 {
-    //falta mirar el callback (tengo puesto que se ejecuta siempre porque se ha de comprovar si ha habido cambios en los widgets)
     window.graph.runStep(); 
 
     time.last = time.now || 0;
