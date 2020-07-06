@@ -15,10 +15,10 @@ var mouse = null;
 var entity = null;
 
 const options = {
-    quality: 30.0,
-    color_bg: [0.5,0.5,0.5,1.0],
-    color_mesh: [1.0,0.0,1.0,1.0],
-    brightness: 1.0
+    quality: 64.0,
+    color_bg: [0.82, 0.91, 0.98, 1.0],
+    color_mesh: [1.0, 0.0, 1.0, 1.0],
+    brightness: 2.0
 }
 
 const time = {
@@ -117,7 +117,7 @@ function initListeners()
             </script>
 
             <br /> <br />
-            <p>Mesh Color (if no rendering algorithm)</p> <input id="in_objcolor" class="color" onchange="updateOptions(this.id)">
+            <p>Mesh Color (surface rendering)</p> <input id="in_objcolor" class="color" onchange="updateOptions(this.id)">
             <script>    
                 var elem = document.getElementById('in_objcolor');
                 var color = new jscolor.color(elem, {rgb: options.color_mesh});
@@ -205,7 +205,7 @@ function graphTemplate()
 
     var node_tra2 = LiteGraph.createNode("Operator/Translate");
     node_tra2.pos = [300,575];
-    node_tra2.setY(-1.0);
+    node_tra2.setY(-0.5);
     graph.add(node_tra2);
 
     var node_grad = LiteGraph.createNode("Texture/Gradient");
@@ -237,7 +237,7 @@ function createScene()
     camera = new RD.Camera({position: [0,10,10], aspect: gl.canvas.width / gl.canvas.height});
 
     //create default mesh
-    entity = new Entity({type: "cube", size: 3});
+    entity = new Entity({type: "cube", size: 2});
 
     //adjust camera to mesh bounding
     entity.centerInView(camera);
@@ -333,7 +333,7 @@ function update(dt)
 
 function updateCamera(dt)
 {
-    if (gl.mouse.left_button || gl.mouse.right_button) //orbit
+    if (mouse._button == 1) //left: orbit
     {
         if (mouse._drag_state)
         {
@@ -344,7 +344,15 @@ function updateCamera(dt)
             mouse._drag_state = false;
         } 
     }
-    if (mouse._wheel_state) //zoom
+    if (mouse._button == 2) //right: pan
+    {
+        if (mouse._drag_state)
+        {
+            camera.move([-mouse._delta_x * dt * 0.3, mouse._delta_y * dt * 0.3, 0]);
+            mouse._drag_state = false;
+        }
+    }
+    if (mouse._wheel_state) //wheel: zoom
     {
         zoomCamera(dt);
         mouse._wheel_state = false;

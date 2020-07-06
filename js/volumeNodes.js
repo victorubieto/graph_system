@@ -1461,22 +1461,27 @@ vec3 setRotation(vec3 vector, float x, float y, float z){
     `;
     
     volume_code += `
-    for(int i=0; i<100000; i++)
+    for(int i = 0; i < 100000; i++)
     {
+        // get the density and color of the current sample
         float v = ` +  modifiers._density + `;
         sample_color = vec4(` +  modifiers._color + `);
         sample_color = vec4(sample_color.xyz, v * sample_color.w);
 
-        //transparency, applied this way to avoid color bleeding
+        // transparency, applied this way to avoid color bleeding
         sample_color.xyz = sample_color.xyz * sample_color.w; 
-               
-        final_color = d * sample_color * (1.0 - final_color.w) + final_color; //compositing with previous value
-        if (final_color.w >= 1.0) break;
         
+        // compositing with previous value
+        final_color = d * sample_color * (1.0 - final_color.w) + final_color;
+        // if the opacity is 1 or greater, we would not see nothing more
+        if (final_color.w >= 1.0) 
+            break;
+            
+        // next iteration, if the sample is out of the object, break
         sample_pos = sample_pos + ray_step;
-
         vec3 abss = abs(sample_pos);
-        if (i > 1 && (abss.x > u_obj_size || abss.y > u_obj_size || abss.z > u_obj_size)) break;
+        if (i > 1 && (abss.x > u_obj_size || abss.y > u_obj_size || abss.z > u_obj_size)) 
+            break;
     }
 
     `;
