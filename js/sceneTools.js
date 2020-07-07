@@ -10,7 +10,7 @@
  * It controls the mouse state
 **/
 
-function Mouse() 
+function Mouse()
 {
     this._button = 0;
     this._pos_x = 0;
@@ -24,7 +24,7 @@ function Mouse()
     this.initListeners();
 }
 
-Mouse.prototype.initListeners = function() 
+Mouse.prototype.initListeners = function()
 {
     var that = this; //to use in the callbacks
 

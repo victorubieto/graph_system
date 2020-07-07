@@ -74,6 +74,65 @@ pre {
  }
 
 
+/* SLIDER */
+
+.slidecontainer {
+width: 63%;
+}
+
+.slider {
+-webkit-appearance: none;
+width: 63%;
+height: 15px;
+background: #e4e4e4;
+outline: none;
+opacity: 0.7;
+-webkit-transition: .2s;
+transition: opacity .2s;
+border-color: #8d8d8d;
+border-style: groove;
+}
+
+.slider:hover {
+opacity: 1;
+}
+
+.slider::-webkit-slider-thumb {
+-webkit-appearance: none;
+appearance: none;
+width: 15px;
+height: 15px;
+background: #272727;
+cursor: pointer;
+}
+
+.slider::-moz-range-thumb {
+width: 15px;
+height: 15px;
+background: #272727;
+cursor: pointer;
+}
+
+
+/* PROGRESS BAR */
+
+#myProgress {
+    width: 75%;
+    background-color: #ddd;
+    margin-top: 10px;
+    margin-left: 3px;
+  }
+  
+  #myBar {
+    width: 1%;
+    height: 10px;
+    background-color: rgb(255, 97, 35);;
+    text-align: center;
+    line-height: 10px;
+    color: white;
+  }
+
+
 /* DIALOG */
 
  .dialog {
@@ -214,7 +273,8 @@ pre {
 }
 
 .dialog button {
-	border-radius: 4px;
+    border-radius: 4px;
+    border: none;
     padding: 4px 20px;
     margin-left: 0px;
     margin-bottom: 0px;

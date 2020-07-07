@@ -18,7 +18,7 @@ const options = {
     quality: 64.0,
     color_bg: [0.82, 0.91, 0.98, 1.0],
     color_mesh: [1.0, 0.0, 1.0, 1.0],
-    brightness: 2.0
+    brightness: 1.0
 }
 
 const time = {
@@ -123,13 +123,30 @@ function initListeners()
                 var color = new jscolor.color(elem, {rgb: options.color_mesh});
             </script>
 
+            <br /> <br />            
+            <p>Quality: <span id="quality_val"></span></p>
+            <input type="range" min="1" max="100" value="50" class="slider" id="in_quality" onchange="updateOptions(this.id)">
             <br /> <br />
-            <p>Quality</p> <input id="in_quality" class="w2ui-btn" onchange="updateOptions(this.id)" style="height:20px;"></input>
-            <script> document.getElementById('in_quality').value = options.quality; </script>
-            <br /> <br />
-
-            <p>Brightness</p> <input id="in_brightness" class="w2ui-btn" onchange="updateOptions(this.id)" style="height:20px;"></input>
-            <script> document.getElementById('in_brightness').value = options.brightness; </script>
+            <script>
+                var slider = document.getElementById("in_quality");
+                slider.value = options.quality;
+                var quality_out = document.getElementById("quality_val");
+                quality_out.innerHTML = slider.value;
+                slider.oninput = function() {
+                    quality_out.innerHTML = this.value;
+                }
+            </script>
+            <p>Brightness: <span id="brightness_val"></span></p>
+            <input type="range" min="0" max="10" value="1" class="slider" id="in_brightness" onchange="updateOptions(this.id)">
+            <script>
+                var slider = document.getElementById("in_brightness");
+                slider.value = options.brightness;
+                var brightmess_out = document.getElementById("brightness_val");
+                brightmess_out.innerHTML = slider.value;
+                slider.oninput = function() {
+                    brightmess_out.innerHTML = this.value;
+                }
+            </script>
             </div>`,
             onOpen  : function () {
                 console.log('opened');
@@ -333,7 +350,7 @@ function update(dt)
 
 function updateCamera(dt)
 {
-    if (mouse._button == 1) //left: orbit
+    if (mouse._button == 1 || mouse._button == 4) //left,center: orbit
     {
         if (mouse._drag_state)
         {
@@ -348,7 +365,7 @@ function updateCamera(dt)
     {
         if (mouse._drag_state)
         {
-            camera.move([-mouse._delta_x * dt * 0.3, mouse._delta_y * dt * 0.3, 0]);
+            camera.moveLocal([-mouse._delta_x * dt * 0.3, mouse._delta_y * dt * 0.3, 0], camera._fov/45);
             mouse._drag_state = false;
         }
     }

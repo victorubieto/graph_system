@@ -45,15 +45,11 @@ function updateOptions(id)
             break;
         case "in_quality":
 			var quality = document.getElementById('in_quality').value;
-			//check that it is a number
-			quality = parseInt(quality);
-			if (Number.isInteger(quality)) options.quality = quality;
+			options.quality = quality;
             break;
         case "in_brightness":
 			var brightness = document.getElementById('in_brightness').value;
-			//check that it is a number
-			brightness = parseInt(brightness);
-            if (Number.isInteger(brightness)) options.brightness = brightness;
+			options.brightness = brightness;
             break;
     }
 }

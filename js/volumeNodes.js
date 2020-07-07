@@ -548,7 +548,8 @@ float cnoise( vec3 P )
         this.properties = {
             _volume: null,
             _texture: null,
-            state: "Empty"
+            _state: "Empty",
+            _progress: 1
         };
     }
 
@@ -581,17 +582,45 @@ float cnoise( vec3 P )
                 panel.content.appendChild(elem_button);
                 break;
 
-            case "state":
+            case "_state":
                 var elem = document.createElement("span");
                 elem.id = "state";
                 elem.class = "text";
-                elem.innerText = this.properties.state;
+                elem.innerText = this.properties._state;
                 elem.style.paddingLeft = "10px";
                 panel.content.appendChild(elem);
+                break;
+
+            case "_progress":
+                var elem_progress = document.createElement("div");
+                elem_progress.id = "myProgress";
+                panel.content.appendChild(elem_progress);
+                var elem_bar = document.createElement("div");
+                elem_bar.id = "myBar";
+                elem_bar.style.width = that.properties._progress + "%";
+                elem_bar.innerHTML = that.properties._progress  + "%";
+                elem_progress.appendChild(elem_bar);
                 break;
         }
 
         return true;
+    };
+
+    //function to control the progress bar when loading a dataset
+    Dicom.prototype.fillProgress = function(max, speed)
+    {
+        that = this;
+        var elem_bar = document.getElementById("myBar");
+        var id = setInterval(frame, speed);
+        function frame() {
+            if (that.properties._progress >= max) {
+                clearInterval(id);
+            } else {
+                that.properties._progress++;
+                elem_bar.style.width = that.properties._progress + "%";
+                elem_bar.innerHTML = that.properties._progress  + "%";
+            }
+        }
     };
 
     Dicom.prototype.handleInput = function(files)
@@ -603,18 +632,15 @@ float cnoise( vec3 P )
 
     Dicom.prototype.onVolume = function(response)
     {
-        this.properties.state = "Loading...";
-        var elem = document.getElementById("state");
-        elem.innerText = this.properties.state;
-
         if(response.status == VolumeLoader.DONE){
             console.log("Volume loaded.");
             this.properties._volume = response.volume;
             this.color = "#a06236"; //use color to remark the usefull output node
             
-            this.properties.state = "Loaded!";
+            this.properties._state = "Loaded!";
             var elem = document.getElementById("state");
-            elem.innerText = this.properties.state;
+            elem.innerText = this.properties._state;
+            this.fillProgress(100,30);
 
             this.properties._volume.computeMinMax();
             switch(this.properties._volume.voxelType){
@@ -634,13 +660,29 @@ float cnoise( vec3 P )
         else if(response.status == VolumeLoader.ERROR){
             console.log("Error: ", response.explanation);
         }else if(response.status == VolumeLoader.STARTING){
-            console.log("Starting...");
+            this.properties._state = "Starting...";
+            console.log(this.properties._state);
+            var elem = document.getElementById("state");    
+            elem.innerText = this.properties._state;
+            this.fillProgress(60,30);
         }else if(response.status == VolumeLoader.LOADINGFILES){
-            console.log("Loading Files...");
+            this.properties._state = "Loading Files...";
+            console.log(this.properties._state);
+            var elem = document.getElementById("state");
+            elem.innerText = this.properties._state;
+            this.fillProgress(80,30);
         }else if(response.status == VolumeLoader.PARSINGFILES){
-            console.log("Parsing Volumes...");
+            this.properties._state = "Parsing Volumes...";
+            console.log(this.properties._state);
+            var elem = document.getElementById("state");
+            elem.innerText = this.properties._state;
+            this.fillProgress(90,30);
         }else if(response.status == VolumeLoader.CREATINGVOLUMES){
-            console.log("Creating Volumes...");
+            this.properties._state = "Creating Volumes...";
+            console.log(this.properties._state);
+            var elem = document.getElementById("state");
+            elem.innerText = this.properties._state;
+            this.fillProgress(99,30);
         }
     };
 
