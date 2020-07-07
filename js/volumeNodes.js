@@ -943,7 +943,8 @@ vec4 getVoxel(vec3 p)
             fac = this.widget.value;
         } else {
             this.widget.disabled = true;
-            fac = Math.min(Math.max(0.0, fac), 1.0);
+            if (fac.constructor === Number)
+                fac = Math.min(Math.max(0.0, fac), 1.0);
         }
         fac = this.toString(fac);
 
@@ -1689,29 +1690,27 @@ function checkConnections(node, list, dir) // dir: 1 = both, 2 = inputs, 3 = out
 	var direction = dir || 1; //specify the direction
 
 	var curr_node;
-	if (direction != 3 && node.inputs != undefined) // it will not enter if we are only checking the outputs
+	if (direction != 3 && node.inputs != undefined) //it will not enter if we are only checking the outputs
 		for (var i = 0; i < node.inputs.length; i++)
 		{
 			curr_node = node.getInputNode(i);
 			if (curr_node == null)
 				continue;
-			if (_list.includes(curr_node.title))
-				continue;
-			_list.push(curr_node.title);
+			if (!_list.includes(curr_node.title))
+				_list.push(curr_node.title);
 			if (curr_node.inputs == undefined)
 				continue;
 			checkConnections(curr_node, _list, 2);
 		}
 
-	if (direction != 2 && node.outputs != undefined) // it will not enter if we are only checking the inputs
+	if (direction != 2 && node.outputs != undefined) //it will not enter if we are only checking the inputs
 		for (var i = 0; i < node.outputs.length; i++)
 		{
 			curr_node = node.getOutputNodes(i);
 			if (curr_node == null)
 				continue;
-			if (_list.includes(curr_node.title))
-				continue;
-			_list.push(curr_node.title);
+			if (!_list.includes(curr_node.title))
+				_list.push(curr_node.title);
 			if (curr_node.outputs == undefined)
 				continue;
 			checkConnections(curr_node, _list, 3);

@@ -233,6 +233,17 @@ function graphTemplate()
     node_volume.pos = [350,175];
     graph.add(node_volume);
 
+
+    var node_math1 = LiteGraph.createNode("Operator/Math");
+    node_math1.pos = [150,300];
+    node_math1.properties.OP = "*";
+    graph.add(node_math1);
+
+    var node_grad1 = LiteGraph.createNode("Texture/Gradient");
+    node_grad1.pos = [450,300];
+    graph.add(node_grad1);
+
+
     var node_out = LiteGraph.createNode("Output/Material Output");
     node_out.pos = [600,250];
     graph.add(node_out);
@@ -244,8 +255,12 @@ function graphTemplate()
     node_noise.connect(1, node_math, 0);
     node_tra2.connect(0, node_rot, 0);
     node_rot.connect(0, node_grad, 0);
-    node_grad.connect(1, node_math, 1);
-    node_volume.connect(0, node_out, 0);   
+    //node_grad.connect(1, node_math, 1);
+    node_volume.connect(0, node_out, 0);
+    
+    node_grad.connect(1, node_math1, 1);
+    node_math1.connect(0, node_math, 1);
+    node_grad1.connect(1, node_math1, 0);
 }
 
 function createScene()
