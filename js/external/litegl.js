@@ -8399,6 +8399,8 @@ Shader.getUniformFunc = function( data )
 		case GL.SAMPLER_2D:
 		case GL.SAMPLER_3D:
 		case GL.SAMPLER_CUBE:
+		case gl.INT_SAMPLER_3D:
+		case gl.UNSIGNED_INT_SAMPLER_3D:
 			func = gl.uniform1i; break;
 		default: func = gl.uniform1f; break;
 	}	

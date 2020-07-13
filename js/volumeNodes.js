@@ -6,11 +6,6 @@
 var Previous_VS = null;
 var Previous_FS = null;
 
-const macros = {
-    TEXTURE_TYPE: 1,
-    NORMALIZE_VOXEL_VALUE: 1,
-}
-
 addNodes = function()
 {
     // ------------------------------------------ Number Node ------------------------------------------ //
@@ -702,6 +697,27 @@ uniform float u_max_value` + newCounter + `;
         }
     };
 
+    Dicom.prototype.toString = function(input)
+    {
+        if (input == null) {
+            return "null";
+        } else if (input.constructor === Number) {
+            return input.toFixed(1);
+        } else if (input.constructor === Array) {
+            var str = "";
+            for (var i = 0; i < (input.length - 1); ++i) {
+                if (input[i] % 1 != 0) //check if is decimal or not
+                    str += input[i].toFixed(1) + ",";
+                else
+                    str += input[i] + ".0,";
+            }
+            str += input[i] + ".0";
+            return str;
+        } else {
+            return String(input);
+        }
+    }
+
     Dicom.prototype.handleInput = function(files)
     {
         if(files.length == 0) return;
@@ -729,15 +745,12 @@ uniform float ` + this.u_max_value + `;
 `;
             switch(this.properties._volume.voxelType){
                 case "UI":
-                    macros.TEXTURE_TYPE = 2;
                     Dicom.prototype.uniforms += `uniform usampler3D ` + this.u_tex + `;`;
                     break;
                 case "I":
-                    macros.TEXTURE_TYPE = 1;
                     Dicom.prototype.uniforms += `uniform isampler3D ` + this.u_tex + `;`;
                     break;
                 case "F":
-                    macros.TEXTURE_TYPE = 0;
                     Dicom.prototype.uniforms += `uniform sampler3D ` + this.u_tex + `;`;
                     break;
             }
@@ -794,15 +807,18 @@ uniform float ` + this.u_max_value + `;
         var dicom_code;
         switch(this.properties._volume.voxelType){
             case "UI":
-                dicom_code = "getVoxel_U((sample_pos + vec3(1.0))/2.0, " + this.u_tex + ", " + this.u_resolution + ", " + this.u_min_value + ", " + this.u_max_value + ").x";
+                dicom_code = "getVoxel_U";
                 break;
             case "I":
-                dicom_code = "getVoxel_I((sample_pos + vec3(1.0))/2.0, " + this.u_tex + ", " + this.u_resolution + ", " + this.u_min_value + ", " + this.u_max_value + ").x";
+                dicom_code = "getVoxel_I";
                 break;
             case "F":
-                dicom_code = "getVoxel((sample_pos + vec3(1.0))/2.0, " + this.u_tex + ", " + this.u_resolution + ", " + this.u_min_value + ", " + this.u_max_value + ").x";
+                dicom_code = "getVoxel";
                 break;
         }
+        dicom_code += "((sample_pos + vec3(1.0))/2.0, " + this.u_tex + ", vec3(" + this.toString(this.properties._texture.width) + ", " 
+            + this.toString(this.properties._texture.height) + ", " + this.toString(this.properties._texture.depth) + "), " 
+            + this.toString(this.properties._volume._min) + ", " + this.toString(this.properties._volume._max) + ").x";
 
         shader.setUniform(this.u_tex, this.properties._texture.bind(this.dicomsCounter));
         shader.setUniform(this.u_resolution, [this.properties._texture.width, this.properties._texture.height, this.properties._texture.depth]);
@@ -830,9 +846,8 @@ vec4 getVoxel(vec3 p, sampler3D volume_texture, vec3 resolution, float min_value
     p = (p - 0.5) / resolution;
     vec4 v = vec4(texture( volume_texture, p ));
 
-    #if NORMALIZE_VOXEL_VALUE == 1
+    // normalize value
     v = (v - vec4(min_value)) / (max_value - min_value);
-    #endif
     
     return v;
 }
@@ -850,9 +865,8 @@ vec4 getVoxel_I(vec3 p, isampler3D volume_texture, vec3 resolution, float min_va
     p = (p - 0.5) / resolution;
     vec4 v = vec4(texture( volume_texture, p ));
 
-    #if NORMALIZE_VOXEL_VALUE == 1
+    // normalize value
     v = (v - vec4(min_value)) / (max_value - min_value);
-    #endif
     
     return v;
 }
@@ -870,9 +884,8 @@ vec4 getVoxel_U(vec3 p, usampler3D volume_texture, vec3 resolution, float min_va
     p = (p - 0.5) / resolution;
     vec4 v = vec4(texture( volume_texture, p ));
 
-    #if NORMALIZE_VOXEL_VALUE == 1
+    // normalize value
     v = (v - vec4(min_value)) / (max_value - min_value);
-    #endif
     
     return v;
 }`;
@@ -957,19 +970,19 @@ vec4 getVoxel_U(vec3 p, usampler3D volume_texture, vec3 resolution, float min_va
         var result = "";
         switch (this.properties.OP) {
             case "+":
-                result = A + " + " +  B;
+                result = "(" + A + " + " + B + ")";
                 break;
             case "-":
-                result = A + " - " + B;
+                result = "(" + A + " - " + B + ")";
                 break;
             case "*":
-                result = A + " * " + B;
+                result = "(" + A + " * " + B + ")";
                 break;
             case "/":
-                result = A + " / " + B;
+                result = "(" + A + " / " + B + ")";
                 break;
             case "%":
-                result = A % B;
+                result = "mod(" + A + "," + B + ")";
                 break;
             case "^":
                 result = "pow(" + A + "," + B + ")";
@@ -1738,7 +1751,7 @@ float random(){
             if (Previous_VS !== Node_VS_code || Previous_FS !== Node_FS_code)
             {
                 //Load the new shader
-                shader = new Shader( Node_VS_code, Node_FS_code, macros );
+                shader = new Shader( Node_VS_code, Node_FS_code);
                 Previous_VS = Node_VS_code;
                 Previous_FS = Node_FS_code;
             }
@@ -1773,19 +1786,23 @@ float random(){
 // Says if a node is linked with another (distant check) forward
 function isConnected(node, destination_node)
 {
-    var curr_node;
+    var output_nodes;
     for (var i = 0; i < node.outputs.length; i++)
     {
-        curr_node = node.getOutputNodes(i);
-        if (curr_node == null)
+        output_nodes = node.getOutputNodes(i);
+        if (output_nodes == null)
             continue;
-        curr_node = curr_node[0];
-        if (curr_node.title == destination_node)
-            return true;
-        if (curr_node.outputs == undefined)
-            continue;
-        if (isConnected(curr_node, destination_node))
-            return true;
+        var curr_node;
+        for (var j = 0; j < output_nodes.length; j++)
+        {
+            curr_node = output_nodes[j];
+            if (curr_node.title == destination_node)
+                return true;
+            if (curr_node.outputs == undefined)
+                continue;
+            if (isConnected(curr_node, destination_node))
+                return true;
+        }
     }
     return false;
 }

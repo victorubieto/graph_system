@@ -101,6 +101,7 @@ function initListeners()
     // Set buttons
     var optButton = document.getElementById("options");
     var viewShader = document.getElementById("viewShader");
+    var cleanGraph = document.getElementById("cleanGraph");
     var aboutButton = document.getElementById("about");
 
     optButton.addEventListener("click", function(){
@@ -165,8 +166,21 @@ function initListeners()
             buttons: '<button class="w2ui-btn" onclick="downloadFile()">Download</button>',
             onOpen  : function () {
                 console.log('opened');
-            }           
+            }
         });
+    }, false);
+
+    cleanGraph.addEventListener("click", function(){
+            if (confirm("Do you want to clean the editor?")) {
+                var length = graph._nodes_in_order.length;
+                for (var i = 0; i < (length - 2); i++){
+                    var node = graph._nodes_in_order[0];
+                    node.graph.remove(node);
+                }
+                console.log("Existing graph deleted.");
+            } else {
+                console.log("Cleaning operation canceled.");
+            }
     }, false);
 
     aboutButton.addEventListener("click", function(){
@@ -405,4 +419,5 @@ function orbitCamera(yaw, pitch)
 function zoomCamera(dt)
 {
     camera._fov += -mouse._wheel_value * dt;
+    camera._fov = Math.max(0.0, camera._fov);
 }
