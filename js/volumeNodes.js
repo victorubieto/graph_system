@@ -14,7 +14,7 @@ const macros = {
 addNodes = function()
 {
     // ------------------------------------------ Number Node ------------------------------------------ //
-    function NumberSelect() 
+    function NumberSelect()
     {
         this.addOutput("Number","value");
         this.properties = {
@@ -52,7 +52,7 @@ addNodes = function()
 
 
     // ------------------------------------------ Color Node ------------------------------------------ //
-    function ColorSelect() 
+    function ColorSelect()
     {
         this.addOutput("Color", "color");
         this.properties = {
@@ -180,7 +180,7 @@ addNodes = function()
 
 		var curve_texture = this._curve_texture;
 
-        shader.setUniform("u_tf", curve_texture.bind(1)); 
+        shader.setUniform("u_tf", curve_texture.bind(9));
 
         var color_tf = "texture(u_tf, vec2(clamp(v, 0.0, 1.0),0.5))";
 
@@ -424,10 +424,43 @@ uniform sampler2D u_tf;`;
         );
         this.toggle = this.addWidget("toggle","Movement", false, function(v){}, { on: "enabled", off:"disabled"} );
         this.color = "#a06236";
+        this.noiseCounter = 0;
+        for (var i in graph._nodes_in_order)
+        {
+            if (graph._nodes_in_order[i].title == "Noise")
+                this.noiseCounter++;
+        }
+        this.scale = "u_scale" + this.noiseCounter;
+        this.detail = "u_detail" + this.noiseCounter;
+        Noise.prototype.uniforms += `
+uniform float ` + this.scale + `;
+uniform float ` + this.detail + `;`;
     }
     
     Noise.title = "Noise";
     Noise.desc = "gives a random value using Value Noise algorithm";
+
+    Noise.prototype.onRemoved = function()
+    {   
+        // it checks if there exists more noise nodes and rewrites the string of uniforms
+        var newCounter = 0;
+        Noise.prototype.uniforms = ``;
+        for(var i in graph._nodes_in_order)
+        {
+            if (i == this.order) continue;
+            if (graph._nodes_in_order[i].title == "Noise")
+            {
+                //update the index of the node uniforms
+                graph._nodes_in_order[i].noiseCounter = newCounter;
+                graph._nodes_in_order[i].scale = "u_scale" + newCounter;
+                graph._nodes_in_order[i].detail = "u_detail" + newCounter;
+                Noise.prototype.uniforms += `
+uniform float u_scale` + newCounter + `;
+uniform float u_detail` + newCounter + `;`;
+                newCounter++;
+            }
+        }   
+    };
 
     Noise.prototype.setScale = function(v)
     {
@@ -446,9 +479,9 @@ uniform sampler2D u_tf;`;
         if (!isConnected(this, "Material Output"))
             return;
 
-        shader.setUniform("scale", this.properties.scale);
-        shader.setUniform("detail", this.properties.detail);
-        shader.setUniform("distortion", 0.0); // very expensive computationally
+        
+        shader.setUniform(this.scale, this.properties.scale);
+        shader.setUniform(this.detail, this.properties.detail);
         if (this.toggle.value) shader.setUniform("u_time", time.now/1000);
         else shader.setUniform("u_time", 0.0);
 
@@ -456,17 +489,14 @@ uniform sampler2D u_tf;`;
         if(vector === undefined) 
             vector = "sample_pos";
 
-        var noise_code = "cnoise(" + vector + ")";
+        var noise_code = "cnoise(" + vector + ", " + this.scale + ", " + this.detail + ")";
         var noiseRGB_code = "vec4(vec3(" + noise_code + "), 1.0)";
 
         this.setOutputData(0, noiseRGB_code);
         this.setOutputData(1, noise_code);
     }
 
-    Noise.prototype.uniforms = `
-uniform float scale;
-uniform float detail;
-uniform float distortion;`;
+    Noise.prototype.uniforms = ``;
 
     Noise.prototype.pixel_shader = `
 
@@ -508,7 +538,7 @@ float noise( vec3 x )
 
 #define MAX_OCTAVES 16
 
-float fractal_noise(vec3 P)
+float fractal_noise( vec3 P, float detail )
 {
     float fscale = 1.0;
     float amp = 1.0;
@@ -527,14 +557,14 @@ float fractal_noise(vec3 P)
     return sum;
 }
 
-float cnoise( vec3 P )
+float cnoise( vec3 P, float scale, float detail )
 {
     P *= scale;
 
     if (u_time != 0.0) //controlled with a flag
         P += u_time;
 
-    return fractal_noise(P);
+    return fractal_noise(P, detail);
 }`;
 
     LiteGraph.registerNodeType("Texture/Noise", Noise);
@@ -551,10 +581,59 @@ float cnoise( vec3 P )
             _state: "Empty",
             _progress: 1
         };
+
+        this.dicomsCounter = 0;
+        for (var i in graph._nodes_in_order)
+        {
+            if (graph._nodes_in_order[i].title == "Dicom")
+                this.dicomsCounter++;
+        }
+        this.u_tex = "u_volume_texture" + this.dicomsCounter;
+        this.u_resolution = "u_resolution" + this.dicomsCounter;
+        this.u_min_value = "u_min_value" + this.dicomsCounter;
+        this.u_max_value = "u_max_value" + this.dicomsCounter;
     }
 
     Dicom.title = "Dicom";
     Dicom.desc = "allows the user to load a dicom file";
+
+    Dicom.prototype.onRemoved = function()
+    {   
+        // it checks if there exists more dicom nodes and rewrites the string of uniforms
+        var newCounter = 0;
+        Dicom.prototype.uniforms = ``;
+        for(var i in graph._nodes_in_order)
+        {
+            if (i == this.order) continue;
+            if (graph._nodes_in_order[i].title == "Dicom" && graph._nodes_in_order[i].properties._volume != undefined)
+            {
+                //update the index of the node uniforms
+                graph._nodes_in_order[i].dicomsCounter = newCounter;
+                graph._nodes_in_order[i].u_tex ="u_volume_texture" + newCounter;
+                graph._nodes_in_order[i].u_resolution = "u_resolution" + newCounter;
+                graph._nodes_in_order[i].u_min_value = "u_min_value" + newCounter;
+                graph._nodes_in_order[i].u_max_value = "u_max_value" + newCounter;
+
+                Dicom.prototype.uniforms += `
+uniform vec3 u_resolution` + newCounter + `;
+uniform float u_min_value` + newCounter + `;
+uniform float u_max_value` + newCounter + `;
+`;
+                switch(graph._nodes_in_order[i].properties._volume.voxelType){
+                    case "UI":
+                        Dicom.prototype.uniforms += `uniform usampler3D u_volume_texture` + newCounter + `;`;
+                        break;
+                    case "I":
+                        Dicom.prototype.uniforms += `uniform isampler3D u_volume_texture` + newCounter + `;`;
+                        break;
+                    case "F":
+                        Dicom.prototype.uniforms += `uniform sampler3D u_volume_texture` + newCounter + `;`;
+                        break;
+                }
+                newCounter++;
+            }
+        }
+    };
 
     Dicom.prototype.onAddPropertyToPanel = function(i, panel) 
     {
@@ -643,15 +722,23 @@ float cnoise( vec3 P )
             this.fillProgress(100,30);
 
             this.properties._volume.computeMinMax();
+            Dicom.prototype.uniforms += `
+uniform vec3 ` + this.u_resolution + `;
+uniform float ` + this.u_min_value + `;
+uniform float ` + this.u_max_value + `;
+`;
             switch(this.properties._volume.voxelType){
                 case "UI":
                     macros.TEXTURE_TYPE = 2;
+                    Dicom.prototype.uniforms += `uniform usampler3D ` + this.u_tex + `;`;
                     break;
                 case "I":
                     macros.TEXTURE_TYPE = 1;
+                    Dicom.prototype.uniforms += `uniform isampler3D ` + this.u_tex + `;`;
                     break;
                 case "F":
                     macros.TEXTURE_TYPE = 0;
+                    Dicom.prototype.uniforms += `uniform sampler3D ` + this.u_tex + `;`;
                     break;
             }
 
@@ -703,37 +790,36 @@ float cnoise( vec3 P )
         entity._model_matrix[0] /= aux;
         entity._model_matrix[5] /= aux;
         entity._model_matrix[10] /= aux;
+        
+        var dicom_code;
+        switch(this.properties._volume.voxelType){
+            case "UI":
+                dicom_code = "getVoxel_U((sample_pos + vec3(1.0))/2.0, " + this.u_tex + ", " + this.u_resolution + ", " + this.u_min_value + ", " + this.u_max_value + ").x";
+                break;
+            case "I":
+                dicom_code = "getVoxel_I((sample_pos + vec3(1.0))/2.0, " + this.u_tex + ", " + this.u_resolution + ", " + this.u_min_value + ", " + this.u_max_value + ").x";
+                break;
+            case "F":
+                dicom_code = "getVoxel((sample_pos + vec3(1.0))/2.0, " + this.u_tex + ", " + this.u_resolution + ", " + this.u_min_value + ", " + this.u_max_value + ").x";
+                break;
+        }
 
-        var dicom_code = "getVoxel((sample_pos + vec3(1.0))/2.0).x";
-
-        shader.setUniform("u_volume_texture", this.properties._texture.bind(0));
-        shader.setUniform("u_resolution", [this.properties._texture.width, this.properties._texture.height, this.properties._texture.depth]);
-        shader.setUniform("u_min_value", this.properties._volume._min);
-        shader.setUniform("u_max_value", this.properties._volume._max);
+        shader.setUniform(this.u_tex, this.properties._texture.bind(this.dicomsCounter));
+        shader.setUniform(this.u_resolution, [this.properties._texture.width, this.properties._texture.height, this.properties._texture.depth]);
+        shader.setUniform(this.u_min_value, this.properties._volume._min);
+        shader.setUniform(this.u_max_value, this.properties._volume._max);
 
         this.setOutputData(0, dicom_code);
     }
 
-    Dicom.prototype.uniforms = `
-uniform vec3 u_resolution;
-uniform float u_min_value;
-uniform float u_max_value;
-    
-#if TEXTURE_TYPE == 0
-uniform sampler3D u_volume_texture;
-#elif TEXTURE_TYPE == 1
-uniform isampler3D u_volume_texture;
-#else
-uniform usampler3D u_volume_texture;
-#endif
-`;
+    Dicom.prototype.uniforms = ``;
 
     Dicom.prototype.pixel_shader = `
 
-// Dicom function
-vec4 getVoxel(vec3 p)
+// Dicom functions
+vec4 getVoxel(vec3 p, sampler3D volume_texture, vec3 resolution, float min_value, float max_value)
 {
-    p = p*u_resolution + 0.5;
+    p = p*resolution + 0.5;
     
     // Better voxel interpolation from iquilezles.org/www/articles/texture/texture.htm
     vec3 i = floor(p);
@@ -741,11 +827,51 @@ vec4 getVoxel(vec3 p)
     f = f*f*f*(f*(f*6.0-15.0)+10.0);
     p = i + f;
     
-    p = (p - 0.5)/u_resolution;
-    vec4 v = vec4(texture( u_volume_texture, p ));
+    p = (p - 0.5) / resolution;
+    vec4 v = vec4(texture( volume_texture, p ));
 
     #if NORMALIZE_VOXEL_VALUE == 1
-    v = (v - vec4(u_min_value)) / (u_max_value - u_min_value);
+    v = (v - vec4(min_value)) / (max_value - min_value);
+    #endif
+    
+    return v;
+}
+
+vec4 getVoxel_I(vec3 p, isampler3D volume_texture, vec3 resolution, float min_value, float max_value)
+{
+    p = p*resolution + 0.5;
+    
+    // Better voxel interpolation from iquilezles.org/www/articles/texture/texture.htm
+    vec3 i = floor(p);
+    vec3 f = p - i;
+    f = f*f*f*(f*(f*6.0-15.0)+10.0);
+    p = i + f;
+    
+    p = (p - 0.5) / resolution;
+    vec4 v = vec4(texture( volume_texture, p ));
+
+    #if NORMALIZE_VOXEL_VALUE == 1
+    v = (v - vec4(min_value)) / (max_value - min_value);
+    #endif
+    
+    return v;
+}
+
+vec4 getVoxel_U(vec3 p, usampler3D volume_texture, vec3 resolution, float min_value, float max_value)
+{
+    p = p*resolution + 0.5;
+    
+    // Better voxel interpolation from iquilezles.org/www/articles/texture/texture.htm
+    vec3 i = floor(p);
+    vec3 f = p - i;
+    f = f*f*f*(f*(f*6.0-15.0)+10.0);
+    p = i + f;
+    
+    p = (p - 0.5) / resolution;
+    vec4 v = vec4(texture( volume_texture, p ));
+
+    #if NORMALIZE_VOXEL_VALUE == 1
+    v = (v - vec4(min_value)) / (max_value - min_value);
     #endif
     
     return v;
