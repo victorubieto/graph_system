@@ -35,3 +35,11 @@ This is the list of the nodes currently available. There are more comming soon, 
  * [JQuery.js](https://github.com/jquery/jquery)
  * [Gl-Matrix.js](https://github.com/toji/gl-matrix)
  * [Daikon.js](https://github.com/rii-mango/Daikon)
+
+## Examples
+
+Clouds Modeling
+![alt text](https://github.com/victorubieto/graph_system/blob/master/img/readme_examples/example_clouds.PNG?raw=true)
+
+Dicom Visualization
+![alt text](https://github.com/victorubieto/graph_system/blob/master/img/readme_examples/example_torax.PNG?raw=true)
