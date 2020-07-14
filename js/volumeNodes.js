@@ -37,7 +37,7 @@ addNodes = function()
 
     NumberSelect.prototype.onExecute = function() 
     {
-        if (!isConnected(this, "Material Output"))
+        if (!isConnected(this, "Material Output", this, true))
             return;
 
         this.setOutputData(0, this.properties.value);
@@ -99,7 +99,7 @@ addNodes = function()
 
     ColorSelect.prototype.onExecute = function() 
     {
-        if (!isConnected(this, "Material Output"))
+        if (!isConnected(this, "Material Output", this, true))
             return;
 
         var color = this.properties.color;
@@ -126,7 +126,7 @@ addNodes = function()
 
     CoordSelect.prototype.onExecute = function() 
     {
-        if (!isConnected(this, "Material Output"))
+        if (!isConnected(this, "Material Output", this, true))
             return;
 
         this.setOutputData(0, "sample_pos"); // from -obj_size/2 to obj_size/2
@@ -167,7 +167,7 @@ addNodes = function()
 
 	TransferFunc.prototype.onExecute = function() {
         
-		if (!isConnected(this, "Material Output"))
+		if (!isConnected(this, "Material Output", this, true))
         return;
 
         this.updateCurve();
@@ -367,7 +367,7 @@ uniform sampler2D u_tf;`;
 
     Gradient.prototype.onExecute = function()
     {
-        if (!isConnected(this, "Material Output"))
+        if (!isConnected(this, "Material Output", this, true))
             return;
 
         var vector = this.getInputData(0);
@@ -471,7 +471,7 @@ uniform float u_detail` + newCounter + `;`;
 
     Noise.prototype.onExecute = function()
     {
-        if (!isConnected(this, "Material Output"))
+        if (!isConnected(this, "Material Output", this, true))
             return;
 
         
@@ -792,7 +792,7 @@ uniform float ` + this.u_max_value + `;
 
     Dicom.prototype.onExecute = function()
     {
-        if (!isConnected(this, "Material Output"))
+        if (!isConnected(this, "Material Output", this, true))
             return;
 
         if (this.properties._volume === null)
@@ -820,9 +820,11 @@ uniform float ` + this.u_max_value + `;
                 dicom_code = "getVoxel";
                 break;
         }
-        dicom_code += "((sample_pos + vec3(1.0))/2.0, " + this.u_tex + ", vec3(" + this.toString(this.properties._texture.width) + ", " 
-            + this.toString(this.properties._texture.height) + ", " + this.toString(this.properties._texture.depth) + "), " 
-            + this.toString(this.properties._volume._min) + ", " + this.toString(this.properties._volume._max) + ").x";
+        //dicom_code += "((sample_pos + vec3(1.0))/2.0, " + this.u_tex + ", vec3(" + this.toString(this.properties._texture.width) + ", " 
+        //    + this.toString(this.properties._texture.height) + ", " + this.toString(this.properties._texture.depth) + "), " 
+        //    + this.toString(this.properties._volume._min) + ", " + this.toString(this.properties._volume._max) + ").x";
+
+        dicom_code += "((sample_pos + vec3(1.0))/2.0, " + this.u_tex + ", " + this.u_resolution + ", " + this.u_min_value + ", " + this.u_max_value + ").x";
 
         shader.setUniform(this.u_tex, this.properties._texture.bind(this.dicomsCounter));
         shader.setUniform(this.u_resolution, [this.properties._texture.width, this.properties._texture.height, this.properties._texture.depth]);
@@ -958,7 +960,7 @@ vec4 getVoxel_U(vec3 p, usampler3D volume_texture, vec3 resolution, float min_va
 
     MathOperation.prototype.onExecute = function() 
     {
-        if (!isConnected(this, "Material Output"))
+        if (!isConnected(this, "Material Output", this, true))
             return;
 
         var A = this.getInputData(0);
@@ -1077,7 +1079,7 @@ vec4 getVoxel_U(vec3 p, usampler3D volume_texture, vec3 resolution, float min_va
 
     MixColor.prototype.onExecute = function()
     {
-        if (!isConnected(this, "Material Output"))
+        if (!isConnected(this, "Material Output", this, true))
             return;
 
         var fac = this.getInputData(0);
@@ -1181,7 +1183,7 @@ vec4 getVoxel_U(vec3 p, usampler3D volume_texture, vec3 resolution, float min_va
 
     ColorRamp.prototype.onExecute = function()
     {
-        if (!isConnected(this, "Material Output"))
+        if (!isConnected(this, "Material Output", this, true))
             return;
 
         var input = this.getInputData(0);
@@ -1291,7 +1293,7 @@ vec4 colorRamp(float fac, float clamp_min, float clamp_max){
 
     Translate.prototype.onExecute = function()
     {
-        if (!isConnected(this, "Material Output"))
+        if (!isConnected(this, "Material Output", this, true))
             return;
 
         var vector = this.getInputData(0);
@@ -1396,7 +1398,7 @@ vec3 setTranslation(vec3 vector, float x, float y, float z){
 
     Scale.prototype.onExecute = function()
     {
-        if (!isConnected(this, "Material Output"))
+        if (!isConnected(this, "Material Output", this, true))
             return;
 
         var vector = this.getInputData(0);
@@ -1501,7 +1503,7 @@ vec3 setScale(vec3 vector, float x, float y, float z){
 
     Rotate.prototype.onExecute = function()
     {
-        if (!isConnected(this, "Material Output"))
+        if (!isConnected(this, "Material Output", this, true))
             return;
 
         var vector = this.getInputData(0);
@@ -1604,7 +1606,7 @@ vec3 setRotation(vec3 vector, float x, float y, float z){
 
     Volume.prototype.onExecute = function()
     {
-        if (!isConnected(this, "Material Output"))
+        if (!isConnected(this, "Material Output", this, true))
             return;
 
         var color = this.getInputData(0);
@@ -1624,7 +1626,7 @@ vec3 setRotation(vec3 vector, float x, float y, float z){
 
         this.modifiers._density = density;
         this.modifiers._color = color;
-        this.modifiers._jitter = wasConnected(this, "Dicom");
+        this.modifiers._jitter = wasConnected(this, "Dicom", []);
 
         var volume_code = this.completeShader(this.modifiers);
 
@@ -1788,7 +1790,7 @@ float random(){
 *************************************************/
 
 // Says if a node is linked with another (distant check) forward
-function isConnected(node, destination_node)
+function isConnected(node, destination_node, original_node, first_pass)
 {
     var output_nodes;
     for (var i = 0; i < node.outputs.length; i++)
@@ -1800,11 +1802,14 @@ function isConnected(node, destination_node)
         for (var j = 0; j < output_nodes.length; j++)
         {
             curr_node = output_nodes[j];
+            //recursivity case
+            if (original_node.id == node.id && first_pass == false)
+                return false;
             if (curr_node.title == destination_node)
                 return true;
             if (curr_node.outputs == undefined)
                 continue;
-            if (isConnected(curr_node, destination_node))
+            if (isConnected(curr_node, destination_node, original_node, false))
                 return true;
         }
     }
@@ -1812,8 +1817,13 @@ function isConnected(node, destination_node)
 }
 
 // Says if a node has been linked with another (distant check) bakcward
-function wasConnected(node, destination_node)
+function wasConnected(node, destination_node, list)
 {
+    //list to store the id of the nodes checked in order to prevent recursive problems
+    if (list.includes(node.id))
+        return false;
+    list.push(node.id);
+
     var curr_node;
     for (var i = 0; i < node.inputs.length; i++)
     {
@@ -1824,16 +1834,17 @@ function wasConnected(node, destination_node)
             return true;
         if (curr_node.inputs == undefined)
             continue;
-        if (wasConnected(curr_node, destination_node))
+        if (wasConnected(curr_node, destination_node, list))
             return true;
     }
     return false;
 }
 
 // Returns the list of the nodes connected (titles)
-function checkConnections(node, list, dir) // dir: 1 = both, 2 = inputs, 3 = outputs
+function checkConnections(node, title_list, id_list, dir) // dir: 1 = both, 2 = inputs, 3 = outputs
 {
-	var _list = list || []; //continue or init the list
+    var _title_list = title_list || []; //continue or init the list
+    var _id_list = id_list || [node.id];
 	var direction = dir || 1; //specify the direction
 
 	var curr_node;
@@ -1842,26 +1853,37 @@ function checkConnections(node, list, dir) // dir: 1 = both, 2 = inputs, 3 = out
 		{
 			curr_node = node.getInputNode(i);
 			if (curr_node == null)
-				continue;
-			if (!_list.includes(curr_node.title))
-				_list.push(curr_node.title);
+                continue;
+            if (_id_list.includes(curr_node.id)) //avoid recursivity
+                continue;
+            _id_list.push(curr_node.id);
+			if (!_title_list.includes(curr_node.title))
+                _title_list.push(curr_node.title);
 			if (curr_node.inputs == undefined)
 				continue;
-			checkConnections(curr_node, _list, 2);
+			checkConnections(curr_node, _title_list, _id_list, 2);
 		}
 
+    var output_nodes;
 	if (direction != 2 && node.outputs != undefined) //it will not enter if we are only checking the inputs
 		for (var i = 0; i < node.outputs.length; i++)
 		{
-			curr_node = node.getOutputNodes(i);
-			if (curr_node == null)
-				continue;
-			if (!_list.includes(curr_node.title))
-				_list.push(curr_node.title);
-			if (curr_node.outputs == undefined)
-				continue;
-			checkConnections(curr_node, _list, 3);
-		}
+			output_nodes = node.getOutputNodes(i);
+			if (output_nodes == null)
+                continue;
+            for (var j = 0; j < output_nodes.length; j++)
+            {
+                curr_node = output_nodes[j];
+                if (_id_list.includes(curr_node.id)) //avoid recursivity
+                    continue;
+                _id_list.push(curr_node.id);
+                if (!_title_list.includes(curr_node.title))
+                    _title_list.push(curr_node.title);
+                if (curr_node.outputs == undefined)
+                    continue;
+                checkConnections(curr_node, _title_list, _id_list, 3);
+            }
+        }
 
-	return _list;
+	return _title_list;
 }
