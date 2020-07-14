@@ -758,7 +758,11 @@ uniform float ` + this.u_max_value + `;
             this.properties._texture = response.volume.createTexture();
         }
         else if(response.status == VolumeLoader.ERROR){
+            this.properties._state = "Error at loading, check the files.";
             console.log("Error: ", response.explanation);
+            var elem = document.getElementById("state"); 
+            elem.innerText = this.properties._state;
+            this.fillProgress(1,30);
         }else if(response.status == VolumeLoader.STARTING){
             this.properties._state = "Starting...";
             console.log(this.properties._state);
