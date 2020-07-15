@@ -139,182 +139,6 @@ addNodes = function()
     LiteGraph.registerNodeType("Input/CoordSelect", CoordSelect);
 
 
-    // ------------------------------------------ TransferFunc Node ------------------------------------------ //
-    function TransferFunc() {
-        this.addOutput("Color", "color");
-		this.properties = { split_channels: false };
-		this._values = new Uint8Array(256*4);
-		this._values.fill(255);
-		this._curve_texture = null;
-		this._must_update = true;
-		this._points = {
-			RGBA: [[0,0],[1,1]],
-			R: [[0,0],[1,1]],
-			G: [[0,0],[1,1]],
-            B: [[0,0],[1,1]],
-            A: [[0,0],[1,1]]
-		};
-		this.curve_editor = null;
-		this.addWidget("toggle","Split Channels",false,"split_channels");
-		this.addWidget("combo","Channel","RGBA",{ values:["RGBA","R","G","B","A"]});
-		this.curve_offset = 68;
-        this.size = [ 240, 170 ];
-        this.color = "#7c2a31";
-	}
-
-    TransferFunc.title = "Transfer Function";
-    TransferFunc.desc = "control the RGBA for each density value";
-
-	TransferFunc.prototype.onExecute = function() {
-        
-		if (!isConnected(this, "Material Output", this, true))
-        return;
-
-        this.updateCurve();
-        this._must_update = false;
-
-		var curve_texture = this._curve_texture;
-
-        shader.setUniform("u_tf", curve_texture.bind(9));
-
-        var color_tf = "texture(u_tf, vec2(clamp(v, 0.0, 1.0),0.5))";
-
-        this.setOutputData(0, color_tf);
-	};
-
-	TransferFunc.prototype.sampleCurve = function(f,points)
-	{
-		var points = points || this._points.RGBA;
-		if(!points)
-			return;
-		for(var i = 0; i < points.length - 1; ++i)
-		{
-			var p = points[i];
-			var pn = points[i+1];
-			if(pn[0] < f)
-				continue;
-			var r = (pn[0] - p[0]);
-			if( Math.abs(r) < 0.00001 )
-				return p[1];
-			var local_f = (f - p[0]) / r;
-			return p[1] * (1.0 - local_f) + pn[1] * local_f;
-		}
-		return 0;
-	}
-
-	TransferFunc.prototype.updateCurve = function()
-	{
-		var values = this._values;
-		var num = values.length / 4;
-		var split = this.properties.split_channels;
-		for(var i = 0; i < num; ++i)
-		{
-			if(split)
-			{
-				values[i*4] = Math.clamp( this.sampleCurve(i/num,this._points.R)*255,0,255);
-				values[i*4+1] = Math.clamp( this.sampleCurve(i/num,this._points.G)*255,0,255);
-                values[i*4+2] = Math.clamp( this.sampleCurve(i/num,this._points.B)*255,0,255);
-                values[i*4+3] = Math.clamp( this.sampleCurve(i/num,this._points.A)*255,0,255);
-			}
-			else
-			{
-				var v = this.sampleCurve(i/num); //sample curve
-				values[i*4] = values[i*4+1] = values[i*4+2] = values[i*4+3] = Math.clamp(v*255,0,255);
-			}
-		}
-		if(!this._curve_texture)
-			this._curve_texture = new GL.Texture(256,1,{ format: gl.RGBA, magFilter: gl.LINEAR, wrap: gl.CLAMP_TO_EDGE });
-		this._curve_texture.uploadData(values,null,true);
-	}
-
-	TransferFunc.prototype.onSerialize = function(o)
-	{
-		var curves = {};
-		for(var i in this._points)
-			curves[i] = this._points[i].concat();
-		o.curves = curves;
-	}
-
-	TransferFunc.prototype.onConfigure = function(o)
-	{
-		this._points = o.curves;
-		if(this.curve_editor)
-			curve_editor.points = this._points;
-		this._must_update = true;
-	}
-
-	TransferFunc.prototype.onMouseDown = function(e, localpos, graphcanvas)
-	{
-		if(this.curve_editor)
-		{
-            var r = this.curve_editor.onMouseDown([localpos[0],localpos[1]-this.curve_offset], graphcanvas);
-			if(r)
-				this.captureInput(true);
-			return r;
-        }
-	}
-
-	TransferFunc.prototype.onMouseMove = function(e, localpos, graphcanvas)
-	{
-		if(this.curve_editor)
-            return this.curve_editor.onMouseMove([localpos[0],localpos[1]-this.curve_offset], graphcanvas);
-	}
-
-	TransferFunc.prototype.onMouseUp = function(e, localpos, graphcanvas)
-	{
-		if(this.curve_editor)
-			return this.curve_editor.onMouseUp([localpos[0],localpos[1]-this.curve_offset], graphcanvas);
-		this.captureInput(false);
-	}
-
-	TransferFunc.channel_line_colors = { "RGBA":"#666","R":"#F33","G":"#3F3","B":"#33F","A":"#FF0" };
-
-	TransferFunc.prototype.onDrawBackground = function(ctx, graphcanvas)
-	{
-		if(this.flags.collapsed)
-			return;
-
-		if(!this.curve_editor)
-			this.curve_editor = new LiteGraph.CurveEditor(this._points.R);
-		ctx.save();
-		ctx.translate(0,this.curve_offset);
-		var channel = this.widgets[1].value;
-
-		if(this.properties.split_channels)
-		{
-			if(channel == "RGBA")
-			{
-				this.widgets[1].value = channel = "R";
-				this.widgets[1].disabled = false;
-			}
-			this.curve_editor.points = this._points.R;
-			this.curve_editor.draw( ctx, [this.size[0],this.size[1] - this.curve_offset], graphcanvas, "#111", TransferFunc.channel_line_colors.R, true );
-			ctx.globalCompositeOperation = "lighten";
-			this.curve_editor.points = this._points.G;
-			this.curve_editor.draw( ctx, [this.size[0],this.size[1] - this.curve_offset], graphcanvas, null, TransferFunc.channel_line_colors.G, true );
-			this.curve_editor.points = this._points.B;
-			this.curve_editor.draw( ctx, [this.size[0],this.size[1] - this.curve_offset], graphcanvas, null, TransferFunc.channel_line_colors.B, true );
-            this.curve_editor.points = this._points.A;
-			this.curve_editor.draw( ctx, [this.size[0],this.size[1] - this.curve_offset], graphcanvas, null, TransferFunc.channel_line_colors.A, true );
-            ctx.globalCompositeOperation = "source-over";
-		}
-		else
-		{
-			this.widgets[1].value = channel = "RGBA";
-			this.widgets[1].disabled = true;
-		}
-
-		this.curve_editor.points = this._points[channel];
-		this.curve_editor.draw( ctx, [this.size[0],this.size[1] - this.curve_offset], graphcanvas, this.properties.split_channels ? null : "#111", TransferFunc.channel_line_colors[channel]  );
-		ctx.restore();
-	}
-
-    TransferFunc.prototype.uniforms = `
-uniform sampler2D u_tf;`;
-
-	LiteGraph.registerNodeType("Input/Transfer Function", TransferFunc);
-
-
     // ------------------------------------------ Gradient Node ------------------------------------------ //
     function Gradient()
     {
@@ -557,7 +381,7 @@ float cnoise( vec3 P, float scale, float detail )
     P *= scale;
 
     if (u_time != 0.0) //controlled with a flag
-        P += u_time;
+        P += u_time/2.0;
 
     return fractal_noise(P, detail);
 }`;
@@ -687,9 +511,9 @@ uniform float u_max_value` + newCounter + `;
         var elem_bar = document.getElementById("myBar");
         var id = setInterval(frame, speed);
         function frame() {
-            if (that.properties._progress >= max) {
+            if (that.properties._progress >= max || that.properties._state == "Error, no valid Dicoms.")
                 clearInterval(id);
-            } else {
+            else {
                 that.properties._progress++;
                 elem_bar.style.width = that.properties._progress + "%";
                 elem_bar.innerHTML = that.properties._progress  + "%";
@@ -758,7 +582,7 @@ uniform float ` + this.u_max_value + `;
             this.properties._texture = response.volume.createTexture();
         }
         else if(response.status == VolumeLoader.ERROR){
-            this.properties._state = "Error at loading, check the files.";
+            this.properties._state = "Error, no valid Dicoms.";
             console.log("Error: ", response.explanation);
             var elem = document.getElementById("state"); 
             elem.innerText = this.properties._state;
@@ -897,6 +721,182 @@ vec4 getVoxel_U(vec3 p, usampler3D volume_texture, vec3 resolution, float min_va
 }`;
 
     LiteGraph.registerNodeType("Texture/Dicom", Dicom);
+
+    
+    // ------------------------------------------ TransferFunc Node ------------------------------------------ //
+    function TransferFunc() {
+        this.addOutput("Color", "color");
+		this.properties = { split_channels: false };
+		this._values = new Uint8Array(256*4);
+		this._values.fill(255);
+		this._curve_texture = null;
+		this._must_update = true;
+		this._points = {
+			RGBA: [[0,0],[1,1]],
+			R: [[0,0],[1,1]],
+			G: [[0,0],[1,1]],
+            B: [[0,0],[1,1]],
+            A: [[0,0],[1,1]]
+		};
+		this.curve_editor = null;
+		this.addWidget("toggle","Split Channels",false,"split_channels");
+		this.addWidget("combo","Channel","RGBA",{ values:["RGBA","R","G","B","A"]});
+		this.curve_offset = 68;
+        this.size = [ 240, 170 ];
+        this.color = "#a06236";
+	}
+
+    TransferFunc.title = "Transfer Function";
+    TransferFunc.desc = "control the RGBA for each density value";
+
+	TransferFunc.prototype.onExecute = function() {
+        
+		if (!isConnected(this, "Material Output", this, true))
+        return;
+
+        this.updateCurve();
+        this._must_update = false;
+
+		var curve_texture = this._curve_texture;
+
+        shader.setUniform("u_tf", curve_texture.bind(9));
+
+        var color_tf = "texture(u_tf, vec2(clamp(v, 0.0, 1.0),0.5))";
+
+        this.setOutputData(0, color_tf);
+	};
+
+	TransferFunc.prototype.sampleCurve = function(f,points)
+	{
+		var points = points || this._points.RGBA;
+		if(!points)
+			return;
+		for(var i = 0; i < points.length - 1; ++i)
+		{
+			var p = points[i];
+			var pn = points[i+1];
+			if(pn[0] < f)
+				continue;
+			var r = (pn[0] - p[0]);
+			if( Math.abs(r) < 0.00001 )
+				return p[1];
+			var local_f = (f - p[0]) / r;
+			return p[1] * (1.0 - local_f) + pn[1] * local_f;
+		}
+		return 0;
+	}
+
+	TransferFunc.prototype.updateCurve = function()
+	{
+		var values = this._values;
+		var num = values.length / 4;
+		var split = this.properties.split_channels;
+		for(var i = 0; i < num; ++i)
+		{
+			if(split)
+			{
+				values[i*4] = Math.clamp( this.sampleCurve(i/num,this._points.R)*255,0,255);
+				values[i*4+1] = Math.clamp( this.sampleCurve(i/num,this._points.G)*255,0,255);
+                values[i*4+2] = Math.clamp( this.sampleCurve(i/num,this._points.B)*255,0,255);
+                values[i*4+3] = Math.clamp( this.sampleCurve(i/num,this._points.A)*255,0,255);
+			}
+			else
+			{
+				var v = this.sampleCurve(i/num); //sample curve
+				values[i*4] = values[i*4+1] = values[i*4+2] = values[i*4+3] = Math.clamp(v*255,0,255);
+			}
+		}
+		if(!this._curve_texture)
+			this._curve_texture = new GL.Texture(256,1,{ format: gl.RGBA, magFilter: gl.LINEAR, wrap: gl.CLAMP_TO_EDGE });
+		this._curve_texture.uploadData(values,null,true);
+	}
+
+	TransferFunc.prototype.onSerialize = function(o)
+	{
+		var curves = {};
+		for(var i in this._points)
+			curves[i] = this._points[i].concat();
+		o.curves = curves;
+	}
+
+	TransferFunc.prototype.onConfigure = function(o)
+	{
+		this._points = o.curves;
+		if(this.curve_editor)
+			curve_editor.points = this._points;
+		this._must_update = true;
+	}
+
+	TransferFunc.prototype.onMouseDown = function(e, localpos, graphcanvas)
+	{
+		if(this.curve_editor)
+		{
+            var r = this.curve_editor.onMouseDown([localpos[0],localpos[1]-this.curve_offset], graphcanvas);
+			if(r)
+				this.captureInput(true);
+			return r;
+        }
+	}
+
+	TransferFunc.prototype.onMouseMove = function(e, localpos, graphcanvas)
+	{
+		if(this.curve_editor)
+            return this.curve_editor.onMouseMove([localpos[0],localpos[1]-this.curve_offset], graphcanvas);
+	}
+
+	TransferFunc.prototype.onMouseUp = function(e, localpos, graphcanvas)
+	{
+		if(this.curve_editor)
+			return this.curve_editor.onMouseUp([localpos[0],localpos[1]-this.curve_offset], graphcanvas);
+		this.captureInput(false);
+	}
+
+	TransferFunc.channel_line_colors = { "RGBA":"#666","R":"#F33","G":"#3F3","B":"#33F","A":"#FF0" };
+
+	TransferFunc.prototype.onDrawBackground = function(ctx, graphcanvas)
+	{
+		if(this.flags.collapsed)
+			return;
+
+		if(!this.curve_editor)
+			this.curve_editor = new LiteGraph.CurveEditor(this._points.R);
+		ctx.save();
+		ctx.translate(0,this.curve_offset);
+		var channel = this.widgets[1].value;
+
+		if(this.properties.split_channels)
+		{
+			if(channel == "RGBA")
+			{
+				this.widgets[1].value = channel = "R";
+				this.widgets[1].disabled = false;
+			}
+			this.curve_editor.points = this._points.R;
+			this.curve_editor.draw( ctx, [this.size[0],this.size[1] - this.curve_offset], graphcanvas, "#111", TransferFunc.channel_line_colors.R, true );
+			ctx.globalCompositeOperation = "lighten";
+			this.curve_editor.points = this._points.G;
+			this.curve_editor.draw( ctx, [this.size[0],this.size[1] - this.curve_offset], graphcanvas, null, TransferFunc.channel_line_colors.G, true );
+			this.curve_editor.points = this._points.B;
+			this.curve_editor.draw( ctx, [this.size[0],this.size[1] - this.curve_offset], graphcanvas, null, TransferFunc.channel_line_colors.B, true );
+            this.curve_editor.points = this._points.A;
+			this.curve_editor.draw( ctx, [this.size[0],this.size[1] - this.curve_offset], graphcanvas, null, TransferFunc.channel_line_colors.A, true );
+            ctx.globalCompositeOperation = "source-over";
+		}
+		else
+		{
+			this.widgets[1].value = channel = "RGBA";
+			this.widgets[1].disabled = true;
+		}
+
+		this.curve_editor.points = this._points[channel];
+		this.curve_editor.draw( ctx, [this.size[0],this.size[1] - this.curve_offset], graphcanvas, this.properties.split_channels ? null : "#111", TransferFunc.channel_line_colors[channel]  );
+		ctx.restore();
+	}
+
+    TransferFunc.prototype.uniforms = `
+uniform sampler2D u_tf;`;
+
+	LiteGraph.registerNodeType("Texture/Transfer Function", TransferFunc);
 
 
     // ------------------------------------------ Math Node ------------------------------------------ //
@@ -1569,7 +1569,8 @@ vec3 setRotation(vec3 vector, float x, float y, float z){
         this.modifiers = {
             _density: null,
             _color: null,
-            _jitter: null
+            _jitter: null,
+            _tf: null
         }
         this.color = "#2c8a5d";
     }
@@ -1627,6 +1628,7 @@ vec3 setRotation(vec3 vector, float x, float y, float z){
         this.modifiers._density = density;
         this.modifiers._color = color;
         this.modifiers._jitter = wasConnected(this, "Dicom", []);
+        this.modifiers._tf = wasConnected(this, "Transfer Function", [])
 
         var volume_code = this.completeShader(this.modifiers);
 
@@ -1653,8 +1655,12 @@ vec3 setRotation(vec3 vector, float x, float y, float z){
     {
         // get the density and color of the current sample
         float v = ` +  modifiers._density + `;
-        sample_color = vec4(` +  modifiers._color + `);
-        sample_color = vec4(sample_color.xyz, v * sample_color.w);
+        sample_color = vec4(` +  modifiers._color + `);`;
+
+        if (!modifiers._tf) volume_code += `
+        sample_color = vec4(sample_color.xyz, v * sample_color.w);`;
+
+        volume_code += `
 
         // transparency, applied this way to avoid color bleeding
         sample_color.xyz = sample_color.xyz * sample_color.w; 
