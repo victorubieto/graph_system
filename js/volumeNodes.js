@@ -12,27 +12,45 @@ addNodes = function()
     function NumberSelect()
     {
         this.addOutput("Number","value");
-        this.properties = {
-            value: 1.0
-        }
-        this.widget = this.addWidget(
-            "number",
-            "Number",
-            this.properties.value,
-            this.setValue.bind(this),
-            {min: 0, max: 10}
-        );
+        
+        this.addProperty("value", 1.0, "num");
+        this.addWidget("number", "Number", this.properties.value, this.setValue.bind(this), {min: 0, max: 10});
         this.widgets_up = true;
+
+        this.out_value = "1.0";
         this.color = "#7c2a31";
-    }
+    };
 
     NumberSelect.title = "Number";
     NumberSelect.desc = "number selector";
 
     NumberSelect.prototype.setValue = function(v) 
     {
+        v = +v.toFixed(3);
         this.properties.value = v;
-        this.widget.value = v;
+        this.widgets[0].value = v;
+        this.out_value = this.toString(v);
+    };
+
+    NumberSelect.prototype.toString = function(input)
+    {
+        if (input == null) {
+            return "null";
+        } else if (input.constructor === Number) {
+            return input.toFixed(1);
+        } else if (input.constructor === Array) {
+            var str = "";
+            for (var i = 0; i < (input.length - 1); ++i) {
+                if (input[i] % 1 != 0) //check if is decimal or not
+                    str += input[i].toFixed(1) + ",";
+                else
+                    str += input[i] + ".0,";
+            }
+            str += input[i] + ".0";
+            return str;
+        } else {
+            return String(input);
+        }
     };
 
     NumberSelect.prototype.onExecute = function() 
@@ -40,7 +58,7 @@ addNodes = function()
         if (!isConnected(this, "Material Output", this, true))
             return;
 
-        this.setOutputData(0, this.properties.value);
+        this.setOutputData(0, this.out_value);
     };
 
     LiteGraph.registerNodeType("Input/Number", NumberSelect);
@@ -50,19 +68,28 @@ addNodes = function()
     function ColorSelect()
     {
         this.addOutput("Color", "color");
-        this.properties = {
-            color: [0.5,0.5,0.5,1.0],
-        };
+
+        this.addProperty("color", [0.5,0.5,0.5,1.0], "array");
+        
+        this.out_color = "vec4(0.5, 0.5, 0.5, 1.0)";
         this.color = "#7c2a31";
-    }
+    };
     
     ColorSelect.title = "Color";
     ColorSelect.desc = "color selector";
 
     ColorSelect.prototype.onAddPropertyToPanel = function(i, panel) 
     {
+        var title = document.createElement("span");
+        title.id = "state";
+        title.class = "text";
+        title.innerText = "Color";
+        title.style.padding = "10px";
+        panel.content.appendChild(title);
+
         var elem = document.createElement("input");
         elem.class = "color";
+        elem.style.border = "none";
         var that = this;
         elem.onchange = function() {that.setValue(color.rgb)};
         panel.content.appendChild(elem);
@@ -75,8 +102,30 @@ addNodes = function()
 
     ColorSelect.prototype.setValue = function(v) 
     {
-        v.push(1.0);
+        v.push(1.0); //add the 4th component
         this.properties.color = v;
+        this.out_color = "vec4(" + this.toString(v) + ")";
+    };
+
+    ColorSelect.prototype.toString = function(input)
+    {
+        if (input == null) {
+            return "null";
+        } else if (input.constructor === Number) {
+            return input.toFixed(1);
+        } else if (input.constructor === Array) {
+            var str = "";
+            for (var i = 0; i < (input.length - 1); ++i) {
+                if (input[i] % 1 != 0) //check if is decimal or not
+                    str += input[i].toFixed(1) + ",";
+                else
+                    str += input[i] + ".0,";
+            }
+            str += input[i] + ".0";
+            return str;
+        } else {
+            return String(input);
+        }
     };
 
     ColorSelect.prototype.onDrawBackground = function(ctx) 
@@ -102,9 +151,7 @@ addNodes = function()
         if (!isConnected(this, "Material Output", this, true))
             return;
 
-        var color = this.properties.color;
-
-        this.setOutputData(0, color);
+        this.setOutputData(0,  this.out_color);
     };
 
     LiteGraph.registerNodeType("Input/Color", ColorSelect);
@@ -118,8 +165,9 @@ addNodes = function()
         this.addOutput("UV","vector");
         this.addOutput("Object","vector");
         this.addOutput("Camera","vector");
+
         this.color = "#7c2a31";
-    }
+    };
 
     CoordSelect.title = "Coordinates";
     CoordSelect.desc = "coordinate vectors selector";
@@ -146,26 +194,20 @@ addNodes = function()
         this.addOutput("Color", "color");
         this.addOutput("Fac", "value");
 
-        this.properties = {
-            type: "Linear"
-        }
-        this.widget = this.addWidget(
-            "combo",
-            "Type",
-            this.properties.type,
-            this.setValue.bind(this),
-            {values: ["Linear", "Quadratic", "Diagonal", "Spherical"]}
-        );
+        this.addProperty("type", "Linear", "enum", { values: Gradient.values });
+        this.addWidget("combo", "Type", this.properties.type, this.setValue.bind(this), {values: Gradient.values});
+        
         this.color = "#a06236";
-    }
+    };
 
     Gradient.title = "Gradient";
     Gradient.desc = "creates a gradient effect for a chosen vector";
+    Gradient.values = ["Linear", "Quadratic", "Diagonal", "Spherical"];
 
     Gradient.prototype.setValue = function(v)
     {
         this.properties.type = v;
-        this.widget.value = v;
+        this.widgets[0].value = v;
     };
 
     Gradient.prototype.toString = function(input)
@@ -187,7 +229,7 @@ addNodes = function()
         } else {
             return String(input);
         }
-    }
+    };
 
     Gradient.prototype.onExecute = function()
     {
@@ -198,20 +240,28 @@ addNodes = function()
         if (vector === undefined)
             vector = "sample_pos";
 
-        if (this.properties.type == "Linear")
-            var gradient_code = "clamp((" + vector + ".x + " + this.toString(entity._mesh.size/2.0) + ")/" + this.toString(entity._mesh.size) + ", 0.0, 1.0)";
-        else if (this.properties.type == "Quadratic")
-            var gradient_code = "clamp(max(" + vector + ".x, 0.0) * max(" + vector + ".x, 0.0), 0.0, 1.0)";
-        else if (this.properties.type == "Diagonal")
-            var gradient_code = "clamp((" + vector + ".x +" + vector + ".y) * 0.5, 0.0, 1.0)";
-        else if (this.properties.type == "Spherical")
-            var gradient_code = "clamp(max(1.0 - sqrt(" + vector + ".x * " + vector + ".x + " + vector + ".y * " + vector + ".y + " + vector + ".z * " + vector + ".z), 0.0), 0.0, 1.0)";
+        var gradient_code;
+        switch(this.properties.type)
+        {
+            case "Linear":
+                gradient_code = "clamp((" + vector + ".x + " + this.toString(entity._mesh.size/2.0) + ")/" + this.toString(entity._mesh.size/2.0) + ", 0.0, 1.0)";
+                break;
+            case "Quadratic":
+                gradient_code = "clamp(max(" + vector + ".x, 0.0) * max(" + vector + ".x, 0.0), 0.0, 1.0)";
+                break;
+            case "Diagonal":
+                gradient_code = "clamp((" + vector + ".x +" + vector + ".y) * 0.5, 0.0, 1.0)";
+                break;
+            case "Spherical":
+                gradient_code = "clamp(max(1.0 - sqrt(" + vector + ".x * " + vector + ".x + " + vector + ".y * " + vector + ".y + " + vector + ".z * " + vector + ".z), 0.0), 0.0, 1.0)";
+                break;
+        }
 
         var gradientRGB_code = "vec4(vec3(" + gradient_code + "), 1.0)";
 
         this.setOutputData(0, gradientRGB_code);
         this.setOutputData(1, gradient_code);
-    }
+    };
 
     LiteGraph.registerNodeType("Texture/Gradient", Gradient);
 
@@ -223,26 +273,13 @@ addNodes = function()
         this.addOutput("Color", "color");
         this.addOutput("Fac", "value");
 
-        this.properties = {
-            scale: 1.0,
-            detail: 0.0,
-        };
-        this.widgetScale = this.addWidget(
-            "number",
-            "Scale",
-            this.properties.scale,
-            this.setScale.bind(this),
-            {min: -100, max: 100}
-        );
-        this.widgetDetail = this.addWidget(
-            "combo",
-            "Detail",
-            this.properties.detail,
-            this.setDetail.bind(this),
-            {values: [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]}
-        );
-        this.toggle = this.addWidget("toggle","Movement", false, function(v){}, { on: "enabled", off:"disabled"} );
-        this.color = "#a06236";
+        this.addProperty("scale", 1.0, "number");
+        this.addProperty("detail", 0.0, "enum", {values: Noise.values});
+        this.addWidget("number", "Scale", this.properties.scale, this.setScale.bind(this), {min: -100, max: 100});
+        this.addWidget("combo", "Detail", this.properties.detail, this.setDetail.bind(this),{values: Noise.values});
+        this.addWidget("toggle","Movement", false, function(v){}, { on: "enabled", off:"disabled"} );
+
+        //this manages the independence of each noise node with others
         this.noiseCounter = 0;
         for (var i in graph._nodes_in_order)
         {
@@ -254,17 +291,20 @@ addNodes = function()
         Noise.prototype.uniforms += `
 uniform float ` + this.scale + `;
 uniform float ` + this.detail + `;`;
-    }
+
+        this.color = "#a06236";
+    };
     
     Noise.title = "Noise";
     Noise.desc = "gives a random value using Value Noise algorithm";
+    Noise.values = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
 
     Noise.prototype.onRemoved = function()
     {   
         // it checks if there exists more noise nodes and rewrites the string of uniforms
         var newCounter = 0;
         Noise.prototype.uniforms = ``;
-        for(var i in graph._nodes_in_order)
+        for (var i in graph._nodes_in_order)
         {
             if (i == this.order) continue;
             if (graph._nodes_in_order[i].title == "Noise")
@@ -284,13 +324,13 @@ uniform float u_detail` + newCounter + `;`;
     Noise.prototype.setScale = function(v)
     {
         this.properties.scale = v;
-        this.widgetScale.value = v;
+        this.widgets[0].value = v;
     };
 
     Noise.prototype.setDetail = function(v)
     {
         this.properties.detail = v;
-        this.widgetDetail.value = v;
+        this.widgets[1].value = v;
     };
 
     Noise.prototype.onExecute = function()
@@ -298,10 +338,9 @@ uniform float u_detail` + newCounter + `;`;
         if (!isConnected(this, "Material Output", this, true))
             return;
 
-        
         shader.setUniform(this.scale, this.properties.scale);
         shader.setUniform(this.detail, this.properties.detail);
-        if (this.toggle.value) shader.setUniform("u_time", time.now/1000);
+        if (this.widgets[2].value) shader.setUniform("u_time", time.now/1000);
         else shader.setUniform("u_time", 0.0);
 
         var vector = this.getInputData(0);
@@ -313,7 +352,7 @@ uniform float u_detail` + newCounter + `;`;
 
         this.setOutputData(0, noiseRGB_code);
         this.setOutputData(1, noise_code);
-    }
+    };
 
     Noise.prototype.uniforms = ``;
 
@@ -394,13 +433,12 @@ float cnoise( vec3 P, float scale, float detail )
     {
         this.addOutput("Density", "value");
 
-        this.properties = {
-            _volume: null,
-            _texture: null,
-            _state: "Empty",
-            _progress: 1
-        };
+        this.addProperty("_volume", null);
+        this.addProperty("_texture", null);
+        this.addProperty("_state", "Empty", "string");
+        this.addProperty("_progress", 1, "number");
 
+        //this manages the independence of each noise node with others
         this.dicomsCounter = 0;
         for (var i in graph._nodes_in_order)
         {
@@ -411,7 +449,7 @@ float cnoise( vec3 P, float scale, float detail )
         this.u_resolution = "u_resolution" + this.dicomsCounter;
         this.u_min_value = "u_min_value" + this.dicomsCounter;
         this.u_max_value = "u_max_value" + this.dicomsCounter;
-    }
+    };
 
     Dicom.title = "Dicom";
     Dicom.desc = "allows the user to load a dicom file";
@@ -421,7 +459,7 @@ float cnoise( vec3 P, float scale, float detail )
         // it checks if there exists more dicom nodes and rewrites the string of uniforms
         var newCounter = 0;
         Dicom.prototype.uniforms = ``;
-        for(var i in graph._nodes_in_order)
+        for (var i in graph._nodes_in_order)
         {
             if (i == this.order) continue;
             if (graph._nodes_in_order[i].title == "Dicom" && graph._nodes_in_order[i].properties._volume != undefined)
@@ -438,7 +476,8 @@ uniform vec3 u_resolution` + newCounter + `;
 uniform float u_min_value` + newCounter + `;
 uniform float u_max_value` + newCounter + `;
 `;
-                switch(graph._nodes_in_order[i].properties._volume.voxelType){
+                switch (graph._nodes_in_order[i].properties._volume.voxelType)
+                {
                     case "UI":
                         Dicom.prototype.uniforms += `uniform usampler3D u_volume_texture` + newCounter + `;`;
                         break;
@@ -458,7 +497,8 @@ uniform float u_max_value` + newCounter + `;
     {
         var that = this;
 
-        switch (i) {
+        switch (i) 
+        {
             case "_volume":
                 var elem_input = document.createElement("input");
                 elem_input.id = "dicomInput" + this.id;
@@ -521,37 +561,17 @@ uniform float u_max_value` + newCounter + `;
         }
     };
 
-    Dicom.prototype.toString = function(input)
-    {
-        if (input == null) {
-            return "null";
-        } else if (input.constructor === Number) {
-            return input.toFixed(1);
-        } else if (input.constructor === Array) {
-            var str = "";
-            for (var i = 0; i < (input.length - 1); ++i) {
-                if (input[i] % 1 != 0) //check if is decimal or not
-                    str += input[i].toFixed(1) + ",";
-                else
-                    str += input[i] + ".0,";
-            }
-            str += input[i] + ".0";
-            return str;
-        } else {
-            return String(input);
-        }
-    }
-
     Dicom.prototype.handleInput = function(files)
     {
-        if(files.length == 0) return;
+        if (files.length == 0) return;
     
         VolumeLoader.loadDicomFiles(files, this.onVolume.bind(this), this.onVolume.bind(this));
     };
 
     Dicom.prototype.onVolume = function(response)
     {
-        if(response.status == VolumeLoader.DONE){
+        if (response.status == VolumeLoader.DONE)
+        {
             console.log("Volume loaded.");
             this.properties._volume = response.volume;
             this.color = "#a06236"; //use color to remark the usefull output node
@@ -567,7 +587,8 @@ uniform vec3 ` + this.u_resolution + `;
 uniform float ` + this.u_min_value + `;
 uniform float ` + this.u_max_value + `;
 `;
-            switch(this.properties._volume.voxelType){
+            switch (this.properties._volume.voxelType)
+            {
                 case "UI":
                     Dicom.prototype.uniforms += `uniform usampler3D ` + this.u_tex + `;`;
                     break;
@@ -580,32 +601,41 @@ uniform float ` + this.u_max_value + `;
             }
 
             this.properties._texture = response.volume.createTexture();
-        }
-        else if(response.status == VolumeLoader.ERROR){
+        } 
+        else if (response.status == VolumeLoader.ERROR)
+        {
             this.properties._state = "Error, no valid Dicoms.";
             console.log("Error: ", response.explanation);
             var elem = document.getElementById("state"); 
             elem.innerText = this.properties._state;
             this.fillProgress(1,30);
-        }else if(response.status == VolumeLoader.STARTING){
+        } 
+        else if (response.status == VolumeLoader.STARTING)
+        {
             this.properties._state = "Starting...";
             console.log(this.properties._state);
             var elem = document.getElementById("state");    
             elem.innerText = this.properties._state;
             this.fillProgress(60,30);
-        }else if(response.status == VolumeLoader.LOADINGFILES){
+        } 
+        else if (response.status == VolumeLoader.LOADINGFILES)
+        {
             this.properties._state = "Loading Files...";
             console.log(this.properties._state);
             var elem = document.getElementById("state");
             elem.innerText = this.properties._state;
             this.fillProgress(80,30);
-        }else if(response.status == VolumeLoader.PARSINGFILES){
+        } 
+        else if (response.status == VolumeLoader.PARSINGFILES)
+        {
             this.properties._state = "Parsing Volumes...";
             console.log(this.properties._state);
             var elem = document.getElementById("state");
             elem.innerText = this.properties._state;
             this.fillProgress(90,30);
-        }else if(response.status == VolumeLoader.CREATINGVOLUMES){
+        }
+        else if (response.status == VolumeLoader.CREATINGVOLUMES)
+        {
             this.properties._state = "Creating Volumes...";
             console.log(this.properties._state);
             var elem = document.getElementById("state");
@@ -644,10 +674,6 @@ uniform float ` + this.u_max_value + `;
                 dicom_code = "getVoxel";
                 break;
         }
-        //dicom_code += "((sample_pos + vec3(1.0))/2.0, " + this.u_tex + ", vec3(" + this.toString(this.properties._texture.width) + ", " 
-        //    + this.toString(this.properties._texture.height) + ", " + this.toString(this.properties._texture.depth) + "), " 
-        //    + this.toString(this.properties._volume._min) + ", " + this.toString(this.properties._volume._max) + ").x";
-
         dicom_code += "((sample_pos + vec3(1.0))/2.0, " + this.u_tex + ", " + this.u_resolution + ", " + this.u_min_value + ", " + this.u_max_value + ").x";
 
         shader.setUniform(this.u_tex, this.properties._texture.bind(this.dicomsCounter));
@@ -656,7 +682,7 @@ uniform float ` + this.u_max_value + `;
         shader.setUniform(this.u_max_value, this.properties._volume._max);
 
         this.setOutputData(0, dicom_code);
-    }
+    };
 
     Dicom.prototype.uniforms = ``;
 
@@ -724,10 +750,15 @@ vec4 getVoxel_U(vec3 p, usampler3D volume_texture, vec3 resolution, float min_va
 
     
     // ------------------------------------------ TransferFunc Node ------------------------------------------ //
-    function TransferFunc() {
+    function TransferFunc() 
+    {
         this.addOutput("Color", "color");
-		this.properties = { split_channels: false };
-		this._values = new Uint8Array(256*4);
+        
+        this.addProperty("split_channels", false, "boolean");
+		this.addWidget("toggle", "Split Channels", false, "split_channels");
+		this.addWidget("combo", "Channel", "RGBA", { values: TransferFunc.values});
+
+        this._values = new Uint8Array(256*4);
 		this._values.fill(255);
 		this._curve_texture = null;
 		this._must_update = true;
@@ -737,19 +768,19 @@ vec4 getVoxel_U(vec3 p, usampler3D volume_texture, vec3 resolution, float min_va
 			G: [[0,0],[1,1]],
             B: [[0,0],[1,1]],
             A: [[0,0],[1,1]]
-		};
+		};        
 		this.curve_editor = null;
-		this.addWidget("toggle","Split Channels",false,"split_channels");
-		this.addWidget("combo","Channel","RGBA",{ values:["RGBA","R","G","B","A"]});
-		this.curve_offset = 68;
+        this.curve_offset = 68;
         this.size = [ 240, 170 ];
         this.color = "#a06236";
-	}
+	};
 
     TransferFunc.title = "Transfer Function";
     TransferFunc.desc = "control the RGBA for each density value";
+    TransferFunc.values = ["RGBA","R","G","B","A"];
 
-	TransferFunc.prototype.onExecute = function() {
+    TransferFunc.prototype.onExecute = function() 
+    {
         
 		if (!isConnected(this, "Material Output", this, true))
         return;
@@ -784,7 +815,7 @@ vec4 getVoxel_U(vec3 p, usampler3D volume_texture, vec3 resolution, float min_va
 			return p[1] * (1.0 - local_f) + pn[1] * local_f;
 		}
 		return 0;
-	}
+	};
 
 	TransferFunc.prototype.updateCurve = function()
 	{
@@ -809,7 +840,7 @@ vec4 getVoxel_U(vec3 p, usampler3D volume_texture, vec3 resolution, float min_va
 		if(!this._curve_texture)
 			this._curve_texture = new GL.Texture(256,1,{ format: gl.RGBA, magFilter: gl.LINEAR, wrap: gl.CLAMP_TO_EDGE });
 		this._curve_texture.uploadData(values,null,true);
-	}
+	};
 
 	TransferFunc.prototype.onSerialize = function(o)
 	{
@@ -817,7 +848,7 @@ vec4 getVoxel_U(vec3 p, usampler3D volume_texture, vec3 resolution, float min_va
 		for(var i in this._points)
 			curves[i] = this._points[i].concat();
 		o.curves = curves;
-	}
+	};
 
 	TransferFunc.prototype.onConfigure = function(o)
 	{
@@ -825,7 +856,7 @@ vec4 getVoxel_U(vec3 p, usampler3D volume_texture, vec3 resolution, float min_va
 		if(this.curve_editor)
 			curve_editor.points = this._points;
 		this._must_update = true;
-	}
+	};
 
 	TransferFunc.prototype.onMouseDown = function(e, localpos, graphcanvas)
 	{
@@ -836,20 +867,20 @@ vec4 getVoxel_U(vec3 p, usampler3D volume_texture, vec3 resolution, float min_va
 				this.captureInput(true);
 			return r;
         }
-	}
+	};
 
 	TransferFunc.prototype.onMouseMove = function(e, localpos, graphcanvas)
 	{
 		if(this.curve_editor)
             return this.curve_editor.onMouseMove([localpos[0],localpos[1]-this.curve_offset], graphcanvas);
-	}
+	};
 
 	TransferFunc.prototype.onMouseUp = function(e, localpos, graphcanvas)
 	{
 		if(this.curve_editor)
 			return this.curve_editor.onMouseUp([localpos[0],localpos[1]-this.curve_offset], graphcanvas);
 		this.captureInput(false);
-	}
+	};
 
 	TransferFunc.channel_line_colors = { "RGBA":"#666","R":"#F33","G":"#3F3","B":"#33F","A":"#FF0" };
 
@@ -891,7 +922,7 @@ vec4 getVoxel_U(vec3 p, usampler3D volume_texture, vec3 resolution, float min_va
 		this.curve_editor.points = this._points[channel];
 		this.curve_editor.draw( ctx, [this.size[0],this.size[1] - this.curve_offset], graphcanvas, this.properties.split_channels ? null : "#111", TransferFunc.channel_line_colors[channel]  );
 		ctx.restore();
-	}
+	};
 
     TransferFunc.prototype.uniforms = `
 uniform sampler2D u_tf;`;
@@ -905,22 +936,24 @@ uniform sampler2D u_tf;`;
         this.addInput("A", "value");
         this.addInput("B", "value");
         this.addOutput("=", "value");
+
         this.addProperty("A", 1);
         this.addProperty("B", 1);
         this.addProperty("OP", "+", "enum", { values: MathOperation.values });
-        this.color = "#4987af";
-    }
+        this.addWidget("combo", "OP", this.properties.OP, this.setValue.bind(this), {values: MathOperation.values});
 
-    MathOperation.values = ["+", "-", "*", "/", "%", "^", "max", "min"];
+        this.color = "#4987af";
+    };
 
     MathOperation.title = "Math";
     MathOperation.desc = "easy math operators";
+    MathOperation.values = ["+", "-", "*", "/", "%", "^", "max", "min"];
     MathOperation["@OP"] = {
         type: "enum",
         title: "operation",
         values: MathOperation.values
     };
-    MathOperation.size = [100, 60];
+    MathOperation.size = [120, 70];
 
     MathOperation.prototype.getTitle = function() 
     {
@@ -931,10 +964,7 @@ uniform sampler2D u_tf;`;
 
     MathOperation.prototype.setValue = function(v) 
     {
-        if (typeof v == "string") {
-            v = parseFloat(v);
-        }
-        this.properties["value"] = v;
+        this.properties.OP = v;
     };
 
     MathOperation.prototype.toString = function(input)
@@ -956,7 +986,7 @@ uniform sampler2D u_tf;`;
         } else {
             return String(input);
         }
-    }
+    };
 
     MathOperation.prototype.onExecute = function() 
     {
@@ -1029,31 +1059,92 @@ uniform sampler2D u_tf;`;
     function MixColor()
     {
         this.addInput("Factor", "value");
-        this.properties = {
-            value: 0.5
-        }
-        this.widget = this.addWidget(
-            "number",
-            "Factor",
-            this.properties.value,
-            this.setValue.bind(this),
-            {min: 0.0, max: 1.0}
-        );
-
         this.addInput("Color", "color");
         this.addInput("Color", "color");
         this.addOutput("Color", "color");
         this.addOutput("Fac", "value");
+
+        this.addProperty("value", 0.5, "number");
+        this.addProperty("color1", [0.5,0.5,0.5,1.0], "array");
+        this.addProperty("color2", [0.5,0.5,0.5,1.0], "array");
+        this.addWidget("number", "Factor", this.properties.value, this.setValue.bind(this), {min: 0.0, max: 1.0});
+
+        this.out_color1 = "vec4(0.5, 0.5, 0.5, 1.0)";
+        this.out_color2 = "vec4(0.5, 0.5, 0.5, 1.0)";
         this.color = "#4987af";
-    }
+    };
 
     MixColor.title = "MixRGB";
     MixColor.desc = "interpolates input colors usign a factor";
 
     MixColor.prototype.setValue = function(v) 
     {
+        v = +v.toFixed(3);
         this.properties.value = v;
-        this.widget.value = v;
+        this.widgets[0].value = v;
+    };
+
+    MixColor.prototype.onAddPropertyToPanel = function(i, panel) 
+    {
+        switch (i) 
+        {
+            case "color1":
+                var title = document.createElement("span");
+                title.id = "state";
+                title.class = "text";
+                title.innerText = "Color1";
+                title.style.padding = "10px";
+                panel.content.appendChild(title);
+                
+                var elem = document.createElement("input");
+                elem.class = "color";
+                elem.style.border = "none";
+                var that = this;
+                elem.onchange = function() {that.setColor1(color.rgb)};
+                panel.content.appendChild(elem);
+
+                var color = new jscolor.color(elem, {rgb: this.properties.color1});
+                this.properties.color1 = color.rgb;
+                break;
+            case "color2":
+                var title = document.createElement("span");
+                title.id = "state";
+                title.class = "text";
+                title.innerText = "Color2";
+                title.style.padding = "10px";
+                panel.content.appendChild(title);
+
+                var elem = document.createElement("input");
+                elem.class = "color";
+                elem.style.border = "none";
+                var that = this;
+                elem.onchange = function() {that.setColor2(color.rgb)};
+                panel.content.appendChild(elem);
+
+                var color = new jscolor.color(elem, {rgb: this.properties.color2});
+                this.properties.color2 = color.rgb;
+                break;
+        }
+
+        var title = document.createElement("span");
+        title.innerHTML = "<br>";
+        panel.content.appendChild(title);
+
+        return true;
+    };
+
+    MixColor.prototype.setColor1 = function(v) 
+    {
+        v.push(1.0); //add the 4th component
+        this.properties.color1 = v;
+        this.out_color1 = "vec4(" + this.toString(v) + ")";
+    };
+
+    MixColor.prototype.setColor2 = function(v) 
+    {
+        v.push(1.0); //add the 4th component
+        this.properties.color2 = v;
+        this.out_color2 = "vec4(" + this.toString(v) + ")";
     };
 
     MixColor.prototype.toString = function(input)
@@ -1075,7 +1166,7 @@ uniform sampler2D u_tf;`;
         } else {
             return String(input);
         }
-    }
+    };
 
     MixColor.prototype.onExecute = function()
     {
@@ -1084,10 +1175,10 @@ uniform sampler2D u_tf;`;
 
         var fac = this.getInputData(0);
         if (fac === undefined) {
-            this.widget.disabled = false;
-            fac = this.widget.value;
+            this.widgets[0].disabled = false;
+            fac = this.widgets[0].value;
         } else {
-            this.widget.disabled = true;
+            this.widgets[0].disabled = true;
             if (fac.constructor === Number)
                 fac = Math.min(Math.max(0.0, fac), 1.0);
         }
@@ -1112,7 +1203,7 @@ uniform sampler2D u_tf;`;
 
         this.setOutputData(0, mixRGB_result);
         this.setOutputData(1, mix_result);
-    }
+    };
 
     LiteGraph.registerNodeType("Operator/MixRGB", MixColor);
 
@@ -1124,26 +1215,13 @@ uniform sampler2D u_tf;`;
         this.addOutput("Color", "color");
         this.addOutput("Fac", "value");
 
-        this.properties = {
-            min_value: 0.5,
-            max_value: 0.5
-        }
-        this.widgetMin = this.addWidget(
-            "number",
-            "Min_Value",
-            this.properties.min_value,
-            this.setMinValue.bind(this),
-            {min: 0.0, max: 0.5}
-        );
-        this.widgetMax = this.addWidget(
-            "number",
-            "Max_value",
-            this.properties.max_value,
-            this.setMaxValue.bind(this),
-            {min: 0.5, max: 1.0}
-        );
+        this.addProperty("min_value", 0.5, "number");
+        this.addProperty("max_value", 0.5, "number");
+        this.addWidget("number", "Min_Value", this.properties.min_value, this.setMinValue.bind(this), {min: 0.0, max: 0.5});
+        this.addWidget("number", "Max_value", this.properties.max_value, this.setMaxValue.bind(this), {min: 0.5, max: 1.0});
+        
         this.color = "#4987af";
-    }
+    };
 
     ColorRamp.title = "ColorRamp";
     ColorRamp.desc = "discriminates values between limits";
@@ -1151,13 +1229,13 @@ uniform sampler2D u_tf;`;
     ColorRamp.prototype.setMinValue = function(v) 
     {
         this.properties.min_value = v;
-        this.widgetMin.value = v;
+        this.widgets[0].value = v;
     };
 
     ColorRamp.prototype.setMaxValue = function(v) 
     {
         this.properties.max_value = v;
-        this.widgetMax.value = v;
+        this.widgets[1].value = v;
     };
 
     ColorRamp.prototype.toString = function(input)
@@ -1179,7 +1257,7 @@ uniform sampler2D u_tf;`;
         } else {
             return String(input);
         }
-    }
+    };
 
     ColorRamp.prototype.onExecute = function()
     {
@@ -1195,7 +1273,7 @@ uniform sampler2D u_tf;`;
 
         this.setOutputData(0, rampRGB_code);
         this.setOutputData(1, ramp_code);
-    }
+    };
 
     ColorRamp.prototype.pixel_shader = `
 
@@ -1220,34 +1298,15 @@ vec4 colorRamp(float fac, float clamp_min, float clamp_max){
         this.addInput("Vector", "vector");
         this.addOutput("Vector", "vector");
 
-        this.properties = {
-            _X: 0.0,
-            _Y: 0.0,
-            _Z: 0.0
-        };
-        this.widgetX = this.addWidget(
-            "number",
-            "X",
-            this.properties._X,
-            this.setX.bind(this),
-            {min: -100, max: 100}
-        );
-        this.widgetY = this.addWidget(
-            "number",
-            "Y",
-            this.properties._Y,
-            this.setY.bind(this),
-            {min: -100, max: 100}
-        );
-        this.widgetZ = this.addWidget(
-            "number",
-            "Z",
-            this.properties._Z,
-            this.setZ.bind(this),
-            {min: -100, max: 100}
-        );
+        this.addProperty("_X", 0.0, "number");
+        this.addProperty("_Y", 0.0, "number");
+        this.addProperty("_Z", 0.0, "number");
+        this.addWidget("number", "X", this.properties._X, this.setX.bind(this), {min: -100, max: 100});
+        this.addWidget("number", "Y", this.properties._Y, this.setY.bind(this), {min: -100, max: 100});
+        this.addWidget("number", "Z", this.properties._Z, this.setZ.bind(this), {min: -100, max: 100});
+        
         this.color = "#4987af";
-    }
+    };
 
     Translate.title = "Translate";
     Translate.desc = "basic operations for vectors";
@@ -1255,19 +1314,19 @@ vec4 colorRamp(float fac, float clamp_min, float clamp_max){
     Translate.prototype.setX = function(v) 
     {
         this.properties._X = v;
-        this.widgetX.value = v;
+        this.widgets[0].value = v;
     };
 
     Translate.prototype.setY = function(v) 
     {
         this.properties._Y = v;
-        this.widgetY.value = v;
+        this.widgets[1].value = v;
     };
 
     Translate.prototype.setZ = function(v) 
     {
         this.properties._Z = v;
-        this.widgetZ.value = v;
+        this.widgets[2].value = v;
     };
 
     Translate.prototype.toString = function(input)
@@ -1289,7 +1348,7 @@ vec4 colorRamp(float fac, float clamp_min, float clamp_max){
         } else {
             return String(input);
         }
-    }
+    };
 
     Translate.prototype.onExecute = function()
     {
@@ -1307,7 +1366,7 @@ vec4 colorRamp(float fac, float clamp_min, float clamp_max){
         var translation_code = "setTranslation(" + vector + "," + x + "," + y + "," + z + ")";
 
         this.setOutputData(0, translation_code);
-    }
+    };
 
     Translate.prototype.pixel_shader = `
 
@@ -1325,34 +1384,15 @@ vec3 setTranslation(vec3 vector, float x, float y, float z){
         this.addInput("Vector", "vector");
         this.addOutput("Vector", "vector");
 
-        this.properties = {
-            _X: 1.0,
-            _Y: 1.0,
-            _Z: 1.0
-        };
-        this.widgetX = this.addWidget(
-            "number",
-            "X",
-            this.properties._X,
-            this.setX.bind(this),
-            {min: 0, max: 100}
-        );
-        this.widgetY = this.addWidget(
-            "number",
-            "Y",
-            this.properties._Y,
-            this.setY.bind(this),
-            {min: 0, max: 100}
-        );
-        this.widgetZ = this.addWidget(
-            "number",
-            "Z",
-            this.properties._Z,
-            this.setZ.bind(this),
-            {min: 0, max: 100}
-        );
+        this.addProperty("_X", 1.0, "number");
+        this.addProperty("_Y", 1.0, "number");
+        this.addProperty("_Z", 1.0, "number");
+        this.addWidget("number", "X", this.properties._X, this.setX.bind(this), {min: 0, max: 100});
+        this.addWidget("number", "Y", this.properties._Y, this.setY.bind(this), {min: 0, max: 100});
+        this.addWidget("number", "Z", this.properties._Z, this.setZ.bind(this), {min: 0, max: 100});
+        
         this.color = "#4987af";
-    }
+    };
 
     Scale.title = "Scale";
     Scale.desc = "basic operations for vectors";
@@ -1360,19 +1400,19 @@ vec3 setTranslation(vec3 vector, float x, float y, float z){
     Scale.prototype.setX = function(v) 
     {
         this.properties._X = v;
-        this.widgetX.value = v;
+        this.widgets[0].value = v;
     };
 
     Scale.prototype.setY = function(v) 
     {
         this.properties._Y = v;
-        this.widgetY.value = v;
+        this.widgets[1].value = v;
     };
 
     Scale.prototype.setZ = function(v) 
     {
         this.properties._Z = v;
-        this.widgetZ.value = v;
+        this.widgets[2].value = v;
     };
 
     Scale.prototype.toString = function(input)
@@ -1394,7 +1434,7 @@ vec3 setTranslation(vec3 vector, float x, float y, float z){
         } else {
             return String(input);
         }
-    }
+    };
 
     Scale.prototype.onExecute = function()
     {
@@ -1412,7 +1452,7 @@ vec3 setTranslation(vec3 vector, float x, float y, float z){
         var  scale_code = "setScale(" + vector + "," + x + "," + y + "," + z + ")";
 
         this.setOutputData(0, scale_code);
-    }
+    };
 
     Scale.prototype.pixel_shader = `
 
@@ -1430,34 +1470,15 @@ vec3 setScale(vec3 vector, float x, float y, float z){
         this.addInput("Vector", "vector");
         this.addOutput("Vector", "vector");
 
-        this.properties = {
-            _X: 0.0,
-            _Y: 0.0,
-            _Z: 0.0
-        };
-        this.widgetX = this.addWidget(
-            "number",
-            "X",
-            this.properties._X,
-            this.setX.bind(this),
-            {min: -360, max: 360}
-        );
-        this.widgetY = this.addWidget(
-            "number",
-            "Y",
-            this.properties._Y,
-            this.setY.bind(this),
-            {min: -360, max: 360}
-        );
-        this.widgetZ = this.addWidget(
-            "number",
-            "Z",
-            this.properties._Z,
-            this.setZ.bind(this),
-            {min: -360, max: 360}
-        );
+        this.addProperty("_X", 0.0, "number");
+        this.addProperty("_Y", 0.0, "number");
+        this.addProperty("_Z", 0.0, "number");
+        this.addWidget("number", "X", this.properties._X, this.setX.bind(this), {min: -360, max: 360});
+        this.addWidget("number", "Y", this.properties._Y, this.setY.bind(this), {min: -360, max: 360});
+        this.addWidget("number", "Z", this.properties._Z, this.setZ.bind(this), {min: -360, max: 360});
+        
         this.color = "#4987af";
-    }
+    };
 
     Rotate.title = "Rotate";
     Rotate.desc = "basic operations for vectors (degrees)";
@@ -1465,19 +1486,19 @@ vec3 setScale(vec3 vector, float x, float y, float z){
     Rotate.prototype.setX = function(v) 
     {
         this.properties._X = v;
-        this.widgetX.value = v;
+        this.widgets[0].value = v;
     };
 
     Rotate.prototype.setY = function(v) 
     {
         this.properties._Y = v;
-        this.widgetY.value = v;
+        this.widgets[1].value = v;
     };
 
     Rotate.prototype.setZ = function(v) 
     {
         this.properties._Z = v;
-        this.widgetZ.value = v;
+        this.widgets[2].value = v;
     };
 
     Rotate.prototype.toString = function(input)
@@ -1499,7 +1520,7 @@ vec3 setScale(vec3 vector, float x, float y, float z){
         } else {
             return String(input);
         }
-    }
+    };
 
     Rotate.prototype.onExecute = function()
     {
@@ -1517,7 +1538,7 @@ vec3 setScale(vec3 vector, float x, float y, float z){
         var  rotate_code = "setRotation(" + vector + "," + x + "," + y + "," + z + ")";
 
         this.setOutputData(0, rotate_code);
-    }
+    };
 
     Rotate.prototype.pixel_shader = `
 
@@ -1549,6 +1570,63 @@ vec3 setRotation(vec3 vector, float x, float y, float z){
     LiteGraph.registerNodeType("Operator/Rotate", Rotate);
 
 
+    // ------------------------------------------ Separate Node ------------------------------------------ //
+    function Separate()
+    {
+        this.addInput("RGBA", "color");
+        this.addOutput("R", "value");
+        this.addOutput("G", "value");
+        this.addOutput("B", "value");
+        this.addOutput("A", "value");
+
+        this.color = "#4987af";
+    };
+    
+    Separate.prototype.onExecute = function()
+    {
+        if (!isConnected(this, "Material Output", this, true))
+        return;
+
+        var color = this.getInputData(0);
+        
+        this.setOutputData(0, color + ".r");
+        this.setOutputData(1, color + ".g");
+        this.setOutputData(2, color + ".b");
+        this.setOutputData(3, color + ".a");
+    };
+
+    LiteGraph.registerNodeType("Operator/Separate", Separate);
+
+
+    // ------------------------------------------ Combine Node ------------------------------------------ //
+    function Combine()
+    {
+        this.addInput("R", "value");
+        this.addInput("G", "value");
+        this.addInput("B", "value");
+        this.addInput("A", "value");
+        this.addOutput("RGBA", "color");
+
+        this.color = "#4987af";
+    };
+
+    Combine.prototype.onExecute = function()
+    {
+        if (!isConnected(this, "Material Output", this, true))
+        return;
+
+        var color_r = this.getInputData(0) || "0.0";
+        var color_g = this.getInputData(1) || "0.0";
+        var color_b = this.getInputData(2) || "0.0";
+        var color_a = this.getInputData(3) || "0.0";
+
+        var combine_code = "vec4( " + color_r + ", " + color_g + ", " + color_b + ", " + color_a + " )"
+        this.setOutputData(0, combine_code);
+    };
+
+    LiteGraph.registerNodeType("Operator/Combine", Combine);
+
+
     // ------------------------------------------ Volume Node ------------------------------------------ //
     function Volume()
     {
@@ -1556,16 +1634,9 @@ vec3 setRotation(vec3 vector, float x, float y, float z){
         this.addInput("Density", "value");
         this.addOutput("Volume", "Fragcolor");
         
-        this.properties = {
-            density: 1.0,
-        }
-        this.widget = this.addWidget(
-            "number",
-            "Density",
-            this.properties.density,
-            this.setValue.bind(this),
-            {min: 0, max: 10}
-        )
+        this.addProperty("density", 1.0, "number");
+        this.addWidget("number", "Density", this.properties.density, this.setValue.bind(this), {min: 0, max: 10});
+        
         this.modifiers = {
             _density: null,
             _color: null,
@@ -1573,7 +1644,7 @@ vec3 setRotation(vec3 vector, float x, float y, float z){
             _tf: null
         }
         this.color = "#2c8a5d";
-    }
+    };
 
     Volume.title = "Volume";
     Volume.desc = "volume render algorithm";
@@ -1581,7 +1652,7 @@ vec3 setRotation(vec3 vector, float x, float y, float z){
     Volume.prototype.setValue = function(v) 
     {
         this.properties.density = v;
-        this.widget.value = v;
+        this.widgets[0].value = v;
     };
 
     Volume.prototype.toString = function(input)
@@ -1603,7 +1674,7 @@ vec3 setRotation(vec3 vector, float x, float y, float z){
         } else {
             return String(input);
         }
-    }
+    };
 
     Volume.prototype.onExecute = function()
     {
@@ -1617,11 +1688,11 @@ vec3 setRotation(vec3 vector, float x, float y, float z){
   
         var density = this.getInputData(1);
         if(density === undefined) {
-            this.widget.disabled = false;
-            density = this.toString(this.widget.value);
+            this.widgets[0].disabled = false;
+            density = this.toString(this.widgets[0].value);
         }
         else {
-            this.widget.disabled = true; 
+            this.widgets[0].disabled = true; 
             density = this.toString(density);
         }
 
@@ -1633,7 +1704,7 @@ vec3 setRotation(vec3 vector, float x, float y, float z){
         var volume_code = this.completeShader(this.modifiers);
 
         this.setOutputData(0, volume_code);
-    }  
+    };
 
     Volume.prototype.completeShader = function(modifiers)
     {
@@ -1681,7 +1752,7 @@ vec3 setRotation(vec3 vector, float x, float y, float z){
     `;
 
         return volume_code;
-    }
+    };
   
     Volume.prototype.uniforms = `
 uniform float u_jitter_factor;`;
@@ -1702,7 +1773,7 @@ float random(){
         this.addInput("Frag Color", "Fragcolor");
 
         this.nodes_info;
-    }
+    };
 
     MatOutput.title = "Material Output";
     MatOutput.desc = "material output, assmebles the final shader";
@@ -1768,7 +1839,7 @@ float random(){
                 Previous_FS = Node_FS_code;
             }
         }
-    }
+    };
 
     MatOutput.prototype.generateNodesCode = function()
     {
@@ -1785,7 +1856,7 @@ float random(){
             if (node.pixel_shader) nodes_info.nodes_code += node.pixel_shader;
         }
         return nodes_info; 
-    }
+    };
 
     LiteGraph.registerNodeType("Output/Material Output", MatOutput);
 }

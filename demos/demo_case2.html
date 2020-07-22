@@ -1,0 +1,49 @@
+<!-- Víctor Ubieto 2020 -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Node-Based Shader Editor</title>
+    
+    <link rel="stylesheet" type="text/css" href="../css/external/litegraph.css">
+    <link rel="stylesheet" type="text/css" href="../css/external/w2ui-1.5.rc1.css">
+    <link rel="stylesheet" type="text/css" href="../css/style.css">
+
+    <script type="text/javascript" src="../js/external/gl-matrix.js"></script>
+    <script type="text/javascript" src="../js/external/litegl.js"></script>
+    <script type="text/javascript" src="../js/external/litegraph.js"></script>
+    <script type="text/javascript" src="../js/external/rendeer.js"></script>
+    <script type="text/javascript" src="../js/external/jquery-3.5.1.min.js"></script>
+    <script type="text/javascript" src="../js/external/w2ui-1.5.rc1.js"></script>
+    <script type="text/javascript" src="../js/external/jscolor/jscolor.js"></script>
+    <script type="text/javascript" src="../js/external/daikon.js"></script>
+    <script type="text/javascript" src="../js/external/volume-base.js"></script>
+    <script type="text/javascript" src="../js/external/volume-loader.js"></script>
+
+    <script type="text/javascript" src="../js/utils.js"></script>
+    <script type="text/javascript" src="../js/volumeNodes.js"></script>
+    <script type="text/javascript" src="../js/sceneTools.js"></script>
+</head>
+<body>
+    <div id="top-bar">
+        <div style="float: left; width: 5%; height: 1px;"></div>
+        <button class="button" onclick="window.open('https://github.com/victorubieto/graph_system')">GitHub</button>
+        <button id="options" class="button">Options</button>
+        <button id="viewShader" class="button">View Shader</button>
+        <button id="cleanGraph" class="button">Clean Graph</button>
+        <button id="about" class="button" style="float: right; margin-right: 50px;">About</button>
+        <span class="text" style="float: right; padding-right: 50px;">Node-Based Shader Editor</span>
+    </div>
+    
+    <div id="main">
+        <div id="graph-area">
+            <div id="editor" style="background-color: #222;">
+                <canvas class="Graph"></canvas>
+            </div>
+        </div>
+        <div id="view-area">
+            <canvas class="View"></canvas>
+        </div>
+    </div>
+</body>
+    <script type="text/javascript" src="demo_case2.js"></script>
+</html>

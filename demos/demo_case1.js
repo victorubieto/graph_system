@@ -70,7 +70,7 @@ function initGraphCanvas(container_id)
     var graph = new LGraph();
     var graphcanvas = new LGraphCanvas(canvas, graph);
 
-    graphcanvas.background_image = "../graph_system/img/migrid.png";
+    graphcanvas.background_image = "../../graph_system/img/migrid.png";
 
     graph.onAfterExecute = function() {
         graphcanvas.draw(true);
@@ -200,7 +200,7 @@ function initListeners()
 // This function reads the file that contains the shaders and store them
 function loadShaderAtlas()
 {
-    GL.loadFileAtlas("shaders.glsl", function(files){
+    GL.loadFileAtlas("../shaders.glsl", function(files){
 		shader_atlas = files; //parsed file
 	});
 }
