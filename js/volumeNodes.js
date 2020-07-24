@@ -451,7 +451,7 @@ float cnoise( vec3 P, float scale, float detail )
     if (u_time != 0.0) //controlled with a flag
         P += u_time/2.0;
 
-    return fractal_noise(P, detail);
+    return clamp(fractal_noise(P, detail), 0.0, 1.0);
 }`;
 
     LiteGraph.registerNodeType("Texture/Noise", Noise);

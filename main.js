@@ -230,17 +230,12 @@ function graphTemplate()
     graph.add(node_noise);
 
     var node_rot = LiteGraph.createNode("Operator/Rotate");
-    node_rot.pos = [550,575];
+    node_rot.pos = [400,575];
     node_rot.setZ(-90.0);
     graph.add(node_rot);
 
-    var node_tra2 = LiteGraph.createNode("Operator/Translate");
-    node_tra2.pos = [300,575];
-    node_tra2.setY(-0.5);
-    graph.add(node_tra2);
-
     var node_grad = LiteGraph.createNode("Texture/Gradient");
-    node_grad.pos = [450,400];
+    node_grad.pos = [400,450];
     graph.add(node_grad);
 
     var node_volume = LiteGraph.createNode("Shader/Volume");
@@ -256,7 +251,6 @@ function graphTemplate()
     node_math.connect(0, node_volume, 1);
     node_tra1.connect(0, node_noise, 0);
     node_noise.connect(1, node_math, 0);
-    node_tra2.connect(0, node_rot, 0);
     node_rot.connect(0, node_grad, 0);
     node_grad.connect(1, node_math, 1);
     node_volume.connect(0, node_out, 0);
