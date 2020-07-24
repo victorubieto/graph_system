@@ -19,9 +19,9 @@ This is the list of the most important functionalities of the application.
 
 This is the list of the nodes currently available. There are more comming soon, so stay tunned.
 
- * **Input:** Number, Color, Coordinates, Transfer Function.
- * **Texture:** Gradient, Noise, Dicom.
- * **Operator:** Math, MixRGB, ColorRamp, Translate, Scale, Rotate.
+ * **Input:** Number, Color, Coordinates.
+ * **Texture:** Gradient, Noise, Dicom, Transfer Function.
+ * **Operator:** Math, MixRGB, ColorRamp, Translate, Scale, Rotate, Separate, Combine.
  * **Shader:** Volume.
  * **Output:** Material Output.
 

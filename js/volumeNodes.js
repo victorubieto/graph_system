@@ -172,16 +172,45 @@ addNodes = function()
     CoordSelect.title = "Coordinates";
     CoordSelect.desc = "coordinate vectors selector";
 
+    CoordSelect.prototype.toString = function(input)
+    {
+        if (input == null) {
+            return "null";
+        } else if (input.constructor === Number) {
+            return input.toFixed(1);
+        } else if (input.constructor === Array) {
+            var str = "";
+            for (var i = 0; i < (input.length - 1); ++i) {
+                if (input[i] % 1 != 0) //check if is decimal or not
+                    str += input[i].toFixed(1) + ",";
+                else
+                    str += input[i] + ".0,";
+            }
+            str += input[i] + ".0";
+            return str;
+        } else {
+            return String(input);
+        }
+    };
+
     CoordSelect.prototype.onExecute = function() 
     {
         if (!isConnected(this, "Material Output", this, true))
             return;
 
-        this.setOutputData(0, "sample_pos"); // from -obj_size/2 to obj_size/2
-        this.setOutputData(1, "v_normal"); // from -1 to 1
-        this.setOutputData(2, "vec3(v_coord, 1.0)"); // from 0 to 1
+        this.setOutputData(0, "((sample_pos + " + this.toString(entity._mesh.size/2.0) + ")/" + this.toString(entity._mesh.size) + ")"); // from 0 to 1
+        this.setOutputData(1, "v_normal"); // from -1 or 1 (depends on the face)
+        this.setOutputData(2, "vec3(v_coord, 1.0)"); // from 0 to 1 at each face
         this.setOutputData(3, "v_pos"); // from -1 to 1 (because is in local)
-        this.setOutputData(4, "u_camera_position"); // 
+
+        //entity position in camera space
+        var inv_model = mat4.create();
+        mat4.invert(inv_model, camera._model_matrix);
+        var aux_vec4 = vec4.fromValues(entity._model_matrix[12], entity._model_matrix[13], entity._model_matrix[14], 1);
+        vec4.transformMat4(aux_vec4, aux_vec4, inv_model);
+        var entity_pos_cam_space = vec3.fromValues(aux_vec4[0]/aux_vec4[3], aux_vec4[1]/aux_vec4[3], aux_vec4[2]/aux_vec4[3]);
+        shader.setUniform("u_cam_space", entity_pos_cam_space);
+        this.setOutputData(4, "u_cam_space"); // 
     };
 
     LiteGraph.registerNodeType("Input/CoordSelect", CoordSelect);
@@ -238,13 +267,13 @@ addNodes = function()
 
         var vector = this.getInputData(0);
         if (vector === undefined)
-            vector = "sample_pos";
+            vector = "((sample_pos + " + this.toString(entity._mesh.size/2.0) + ")/" + this.toString(entity._mesh.size) + ")";
 
         var gradient_code;
         switch(this.properties.type)
         {
             case "Linear":
-                gradient_code = "clamp((" + vector + ".x + " + this.toString(entity._mesh.size/2.0) + ")/" + this.toString(entity._mesh.size/2.0) + ", 0.0, 1.0)";
+                gradient_code = "clamp(" + vector + ".x, 0.0, 1.0)";
                 break;
             case "Quadratic":
                 gradient_code = "clamp(max(" + vector + ".x, 0.0) * max(" + vector + ".x, 0.0), 0.0, 1.0)";

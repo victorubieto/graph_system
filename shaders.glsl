@@ -78,6 +78,7 @@ out vec4 final_color;
 
 uniform vec3 u_camera_position;
 uniform vec3 u_local_camera_position;
+uniform vec3 u_cam_space;
 uniform vec4 u_color;
 uniform float u_time;
 uniform float u_quality;
